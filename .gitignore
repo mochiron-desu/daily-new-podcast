@@ -1,0 +1,22 @@
+# Environments
+.venv/
+__pycache__/
+*.pyc
+
+# Local storage & data
+storage/
+*.sqlite
+*.sqlite3
+*.db
+
+# Media files
+*.m4a
+*.mp3
+*.wav
+
+# Secrets & environment
+.env
+.env.local
+
+# Documentation
+PRD.md
