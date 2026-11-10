@@ -15,6 +15,7 @@ import uvicorn
 from .config import load_config
 from .failover import create_app, probe_node, run_failover_check, sync_state_from_nodes
 from .memory import StateDB
+from .notifications import check_telegram_credentials
 from .pipeline import run_daily_pipeline
 from .processor import AudioMasteringError, resolve_ffmpeg_binary
 from .producer import check_notebooklm_auth
@@ -70,6 +71,10 @@ async def _cmd_doctor(args: argparse.Namespace) -> int:
             f"[{ptag}] Publisher  : podbean credentials "
             f"{'present' if configured else 'missing (run with --live after setting .env)'}"
         )
+
+    tg_ok, tg_msg = await check_telegram_credentials(cfg.telegram, verify_live=args.live)
+    tg_tag = "OK" if tg_ok else "WARN"
+    print(f"[{tg_tag}] Telegram   : {tg_msg}")
 
     today = now_in_timezone(cfg.schedule.timezone).date()
     async with httpx.AsyncClient(timeout=cfg.schedule.http_timeout_seconds) as client:

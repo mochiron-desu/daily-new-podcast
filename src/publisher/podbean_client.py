@@ -13,6 +13,19 @@ from .base import PublishedEpisode, PublisherBackend, PublisherError
 
 logger = logging.getLogger(__name__)
 
+_PODBEAN_MAX_CONTENT_CHARS = 500
+
+
+def _truncate_podbean_content(description: str, limit: int = _PODBEAN_MAX_CONTENT_CHARS) -> str:
+    """Enforce Podbean's 500-character episode description cap cleanly."""
+    cleaned = description.strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    clipped = cleaned[: limit - 3].rsplit(" ", 1)[0].rstrip(" \n-,;:")
+    if not clipped:
+        clipped = cleaned[: limit - 3].rstrip()
+    return clipped + "..."
+
 
 class PodbeanPublisher(PublisherBackend):
     """Podbean OAuth2 client-credentials uploader + episode deduplication checker."""
@@ -90,6 +103,78 @@ class PodbeanPublisher(PublisherBackend):
                 )
         return None
 
+    async def _upload_file(
+        self,
+        client: httpx.AsyncClient,
+        token: str,
+        file_path: Path,
+        content_type: str,
+    ) -> str:
+        """Authorize and stream a file to Podbean S3, returning its file_key."""
+        if not file_path.is_file():
+            raise PublisherError(f"File to upload does not exist: {file_path}")
+
+        filesize = file_path.stat().st_size
+        filename = file_path.name
+
+        auth_res = await client.get(
+            f"{self.base_url}/files/uploadAuthorize",
+            params={
+                "access_token": token,
+                "filename": filename,
+                "filesize": filesize,
+                "content_type": content_type,
+            },
+        )
+        if auth_res.status_code >= 400:
+            raise PublisherError(
+                f"Podbean uploadAuthorize failed ({auth_res.status_code}): {auth_res.text}"
+            )
+        auth_payload = auth_res.json()
+        presigned_url = auth_payload.get("presigned_url")
+        file_key = auth_payload.get("file_key")
+        if not presigned_url or not file_key:
+            raise PublisherError(f"Invalid uploadAuthorize payload: {auth_payload}")
+
+        logger.info("Uploading %s (%d KB) to Podbean S3...", filename, filesize // 1024)
+
+        async def _stream_file():
+            with file_path.open("rb") as handle:
+                while chunk := handle.read(262_144):
+                    yield chunk
+
+        put_res = await client.put(
+            presigned_url,
+            content=_stream_file(),
+            headers={
+                "Content-Type": content_type,
+                "Content-Length": str(filesize),
+            },
+        )
+        if put_res.status_code >= 400:
+            raise PublisherError(
+                f"Podbean pre-signed PUT failed ({put_res.status_code}): {put_res.text}"
+            )
+        return str(file_key)
+
+    async def update_podcast_logo(self, image_path: Path) -> str:
+        """Upload cover artwork and update the main Podbean podcast logo."""
+        ext = image_path.suffix.lower()
+        content_type = "image/jpeg" if ext in {".jpg", ".jpeg"} else "image/png"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds, write=120.0)) as client:
+            token = await self._fetch_access_token(client)
+            logo_key = await self._upload_file(client, token, image_path, content_type)
+            res = await client.post(
+                f"{self.base_url}/podcast/update",
+                data={"access_token": token, "logo_key": logo_key},
+            )
+            if res.status_code >= 400:
+                raise PublisherError(
+                    f"Podbean POST /podcast/update failed ({res.status_code}): {res.text}"
+                )
+        logger.info("Updated Podbean podcast logo (logo_key=%s)", logo_key)
+        return logo_key
+
     async def publish(
         self,
         *,
@@ -101,60 +186,17 @@ class PodbeanPublisher(PublisherBackend):
         if not audio_path.is_file():
             raise PublisherError(f"Audio file to upload does not exist: {audio_path}")
 
-        filesize = audio_path.stat().st_size
-        filename = audio_path.name
-
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds, write=300.0)) as client:
             token = await self._fetch_access_token(client)
+            file_key = await self._upload_file(client, token, audio_path, "audio/mpeg")
 
-            # 1. Authorize media upload -> presigned S3 URL + file_key
-            auth_res = await client.get(
-                f"{self.base_url}/files/uploadAuthorize",
-                params={
-                    "access_token": token,
-                    "filename": filename,
-                    "filesize": filesize,
-                    "content_type": "audio/mpeg",
-                },
-            )
-            if auth_res.status_code >= 400:
-                raise PublisherError(
-                    f"Podbean uploadAuthorize failed ({auth_res.status_code}): {auth_res.text}"
-                )
-            auth_payload = auth_res.json()
-            presigned_url = auth_payload.get("presigned_url")
-            file_key = auth_payload.get("file_key")
-            if not presigned_url or not file_key:
-                raise PublisherError(f"Invalid uploadAuthorize payload: {auth_payload}")
-
-            # 2. Stream MP3 bytes asynchronously to pre-signed URL
-            logger.info("Uploading %s (%d KB) to Podbean S3...", filename, filesize // 1024)
-
-            async def _stream_audio():
-                with audio_path.open("rb") as audio_handle:
-                    while chunk := audio_handle.read(262_144):
-                        yield chunk
-
-            put_res = await client.put(
-                presigned_url,
-                content=_stream_audio(),
-                headers={
-                    "Content-Type": "audio/mpeg",
-                    "Content-Length": str(filesize),
-                },
-            )
-            if put_res.status_code >= 400:
-                raise PublisherError(
-                    f"Podbean pre-signed PUT failed ({put_res.status_code}): {put_res.text}"
-                )
-
-            # 3. Publish episode with media_key
+            # Publish episode with media_key
             ep_res = await client.post(
                 f"{self.base_url}/episodes",
                 data={
                     "access_token": token,
                     "title": title,
-                    "content": description,
+                    "content": _truncate_podbean_content(description),
                     "status": self.cfg.publish_status,
                     "type": self.cfg.episode_type,
                     "media_key": file_key,

@@ -116,9 +116,19 @@ def render_dossier_markdown(
         lines.extend(_format_cluster_block(idx, cluster))
 
     if secondary_clusters:
-        lines.extend(["## Developing & Sector Stories (Tech, Science & Global)", ""])
-        for idx, cluster in enumerate(secondary_clusters, start=1):
-            lines.extend(_format_cluster_block(idx, cluster))
+        lines.extend(["## Beat Briefs: National, International, Sports & Tech", ""])
+        grouped: dict[str, list[StoryCluster]] = {}
+        for cluster in secondary_clusters:
+            grouped.setdefault(cluster.category, []).append(cluster)
+        preferred_beats = ["National", "International", "Sports", "Tech"]
+        ordered_beats = [b for b in preferred_beats if b in grouped]
+        ordered_beats.extend(b for b in grouped if b not in ordered_beats)
+        item_num = 1
+        for beat in ordered_beats:
+            lines.append(f"### {beat}")
+            for cluster in grouped[beat]:
+                lines.extend(_format_cluster_block(item_num, cluster))
+                item_num += 1
 
     if rundown_clusters:
         lines.extend(["## Quick-Hit Rundown", ""])

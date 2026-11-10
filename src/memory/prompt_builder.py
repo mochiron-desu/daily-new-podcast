@@ -56,12 +56,26 @@ def build_continuity_prompt(
     matched_arcs: Sequence[MatchedArcContext],
     clusters: Sequence[StoryCluster],
     prompts_dir: Path,
+    audio_format: str = "brief",
+    audio_length: str = "short",
 ) -> tuple[str, Path]:
     """Generate and persist the NotebookLM Audio Overview instructions with continuity."""
     date_label = episode_date.strftime("%B %d, %Y")
+    is_brief = audio_format.lower() == "brief" or audio_length.lower() == "short"
+
+    if is_brief:
+        opener = (
+            f"You are delivering '{show_title}', a short, crisp, to-the-point Indian and global "
+            f"morning news briefing for {date_label}."
+        )
+    else:
+        opener = (
+            f"You are hosting '{show_title}', a crisp, analytical morning news podcast for {date_label}."
+        )
+
     lines: list[str] = [
-        f"You are hosting '{show_title}', a crisp, analytical two-host morning news podcast for {date_label}.",
-        "Open by welcoming listeners to today's morning edition.",
+        opener,
+        "Open by briefly welcoming listeners to today's morning edition.",
         "",
     ]
 
@@ -78,24 +92,36 @@ def build_continuity_prompt(
             )
         lines.append("")
 
-    top_headlines = [c.headline for c in clusters[:3]]
+    top_headlines = [c.headline for c in clusters[:4]]
     if top_headlines:
-        lines.append("TODAY'S TOP HEADLINES TO ANCHOR THE EPISODE:")
+        lines.append("TODAY'S TOP HEADLINES TO ANCHOR THE BRIEFING:")
         for idx, headline in enumerate(top_headlines, start=1):
             lines.append(f"{idx}. {headline}")
         lines.append("")
 
-    lines.extend(
-        [
-            "HOST INSTRUCTIONS:",
-            "1. For developing stories listed above, seamlessly bridge from prior coverage: "
-            '"Picking up where we left off on [topic]..." before explaining today\'s new update.',
-            "2. For brand-new top stories, introduce them clearly as breaking developments and explain why they matter.",
-            "3. Weave tech, AI, and global stories into a cohesive flow, ending with a tight quick-hit rundown.",
-            "4. Keep the conversation natural, sharp, analytical, and listener-friendly; avoid reading bullet lists robotically.",
-            "5. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak as seasoned news hosts.",
-        ]
-    )
+    if is_brief:
+        lines.extend(
+            [
+                "DELIVERY INSTRUCTIONS:",
+                "1. Keep it short, crisp, and strictly to the point—NO deep dives, NO long banter, and NO filler.",
+                "2. Cover all four beats cleanly in order: Indian National news, International affairs, Sports, and Tech.",
+                "3. Give 1-2 punchy sentences per story: what happened and why it matters.",
+                '4. For developing stories listed above, bridge in one quick phrase ("Picking up where we left off on [topic]...") before stating today\'s update.',
+                "5. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak like a sharp morning news anchor.",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "HOST INSTRUCTIONS:",
+                "1. For developing stories listed above, seamlessly bridge from prior coverage: "
+                '"Picking up where we left off on [topic]..." before explaining today\'s new update.',
+                "2. For brand-new top stories, introduce them clearly as breaking developments and explain why they matter.",
+                "3. Cover Indian National news, International news, Sports, and Tech in a cohesive flow.",
+                "4. Keep the conversation natural, sharp, and listener-friendly; avoid reading bullet lists robotically.",
+                "5. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak as seasoned news hosts.",
+            ]
+        )
 
     prompt_text = "\n".join(lines).strip() + "\n"
     ensure_dir(prompts_dir)

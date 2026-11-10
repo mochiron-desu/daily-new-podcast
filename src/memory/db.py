@@ -390,6 +390,7 @@ class StateDB:
         node_id: str,
         node_priority: int,
         ttl_seconds: int = 2400,
+        allow_same_owner: bool = False,
     ) -> tuple[bool, RunLockRecord]:
         """Acquire or renew an active lease for run_date; returns (acquired, current_lock)."""
         date_str = run_date.isoformat() if isinstance(run_date, date) else run_date
@@ -407,7 +408,7 @@ class StateDB:
                 """,
                 (date_str,),
             ).fetchone()
-            if row is not None and row["owner_node_id"] != node_id:
+            if row is not None and (not allow_same_owner or row["owner_node_id"] != node_id):
                 existing = RunLockRecord(
                     run_date=row["run_date"],
                     owner_node_id=row["owner_node_id"],

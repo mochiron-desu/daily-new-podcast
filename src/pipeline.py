@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 from .config import AppConfig
 from .harvester import build_dossier, harvest_feeds
 from .memory import StateDB, build_continuity_prompt, match_developing_arcs
+from .notifications import TelegramNotifier
 from .processor import master_episode_audio
 from .producer import NotebookLMAuthError, generate_ephemeral_audio
 from .publisher import PublisherBackend, build_publisher
@@ -40,24 +42,23 @@ def _build_episode_description(
     matched_arcs: list,
 ) -> str:
     lines: list[str] = [
-        f"{show_title} — Edition for {episode_date.strftime('%B %d, %Y')}.",
-        "",
+        f"{show_title} ({episode_date.strftime('%b %d, %Y')}):",
     ]
-    if matched_arcs:
-        lines.append("Developing Story Arcs:")
-        for arc in matched_arcs:
-            lines.append(f"- {arc.title}: {arc.matched_cluster.headline}")
-        lines.append("")
-    lines.append("Top Headlines:")
-    for cluster in clusters[:5]:
-        lines.append(f"- {cluster.headline} ({', '.join(cluster.sources)})")
-    return "\n".join(lines).strip()
+    for cluster in clusters[:4]:
+        lines.append(f"• [{cluster.category}] {cluster.headline}")
+    if matched_arcs and len("\n".join(lines)) < 380:
+        lines.append(f"Updates: {', '.join(a.title[:45] for a in matched_arcs[:2])}")
+    text = "\n".join(lines).strip()
+    if len(text) > 495:
+        text = text[:492].rstrip() + "..."
+    return text
 
 
 async def run_daily_pipeline(
     cfg: AppConfig,
     db: StateDB | None = None,
     publisher: PublisherBackend | None = None,
+    notifier: TelegramNotifier | None = None,
     *,
     target_date: date | None = None,
     dry_run: bool = False,
@@ -68,11 +69,23 @@ async def run_daily_pipeline(
     ensure_dir(cfg.storage.root)
     state_db = db or StateDB(cfg.storage.db_path)
     pub = publisher or build_publisher(cfg, state_db)
+    tg = notifier or TelegramNotifier(cfg.telegram)
 
     ep_date = target_date or now_in_timezone(cfg.schedule.timezone).date()
     date_str = ep_date.isoformat()
     episode_title = cfg.podcast.episode_title_template.format(date=date_str)
     node_id = cfg.failover.node_id
+
+    async def _notify(stage: str, detail: str = "", *, status: str = "info") -> None:
+        if dry_run:
+            return
+        await tg.send_stage(
+            stage,
+            detail,
+            status=status,
+            episode_date=ep_date,
+            node_id=node_id,
+        )
 
     if not force:
         local_ep = state_db.get_episode_by_date(ep_date)
@@ -146,6 +159,12 @@ async def run_daily_pipeline(
                 status="running",
                 source_node=node_id,
             )
+            await _notify(
+                "Pipeline Started",
+                f"Format: `{cfg.podcast.audio_format}` / `{cfg.podcast.audio_length}`\n"
+                f"Feeds configured: {len(cfg.feeds)}",
+                status="running",
+            )
 
         # 1. Harvest & cluster RSS news
         clusters = await harvest_feeds(cfg.feeds, cfg.harvester)
@@ -173,6 +192,8 @@ async def run_daily_pipeline(
             matched_arcs=matched_arcs,
             clusters=clusters,
             prompts_dir=cfg.storage.prompts_dir,
+            audio_format=cfg.podcast.audio_format,
+            audio_length=cfg.podcast.audio_length,
         )
         description = _build_episode_description(
             ep_date, cfg.podcast.show_title, clusters, matched_arcs
@@ -195,7 +216,21 @@ async def run_daily_pipeline(
                 prompt_path=str(prompt_path),
             )
 
+        cat_counts = Counter(c.category for c in clusters)
+        cat_summary = ", ".join(f"{cat}: {cnt}" for cat, cnt in cat_counts.items())
+        await _notify(
+            "News Harvested & Dossier Ready",
+            f"Clusters: {len(clusters)} ({cat_summary})\n"
+            f"Matched developing arcs: {len(matched_arcs)}",
+            status="info",
+        )
+
         # 4. Generate ephemeral NotebookLM audio overview (.m4a)
+        await _notify(
+            "Generating NotebookLM Audio",
+            f"Uploading `{dossier.pdf_path.name}` and generating `{cfg.podcast.audio_format}` ({cfg.podcast.audio_length}) overview...",
+            status="running",
+        )
         await generate_ephemeral_audio(
             episode_date=ep_date,
             dossier_path=dossier.pdf_path,
@@ -205,6 +240,12 @@ async def run_daily_pipeline(
             podcast_cfg=cfg.podcast,
             storage_root=cfg.storage.root,
             prefer_writable_seed=(cfg.failover.node_role == "primary"),
+        )
+        raw_kb = raw_m4a_path.stat().st_size // 1024
+        await _notify(
+            "NotebookLM Audio Downloaded",
+            f"Raw audio downloaded (`{raw_kb} KB`). Starting ffmpeg mastering...",
+            status="info",
         )
 
         # 5. Master broadcast MP3 via ffmpeg
@@ -217,6 +258,12 @@ async def run_daily_pipeline(
             ffmpeg_bin=cfg.ffmpeg_bin,
         )
         raw_m4a_path.unlink(missing_ok=True)
+        mp3_kb = mastered_mp3.stat().st_size // 1024
+        await _notify(
+            "Audio Mastered & Uploading",
+            f"Mastered `{mastered_mp3.name}` ({mp3_kb} KB). Publishing to `{cfg.publisher_backend}`...",
+            status="info",
+        )
 
         # 6. Publish to Podbean (or configured backend)
         published = await pub.publish(
@@ -246,6 +293,15 @@ async def run_daily_pipeline(
             stale_arc_days=cfg.harvester.stale_arc_days,
         )
 
+        headline_preview = "\n".join(f"• [{c.category}] {c.headline}" for c in clusters[:4])
+        await _notify(
+            "Episode Published",
+            f"*{published.title}*\n"
+            f"Media: {published.media_url or 'local'}\n\n"
+            f"{headline_preview}",
+            status="success",
+        )
+
         logger.info("Pipeline completed successfully for %s on node '%s'", date_str, node_id)
         return PipelineResult(
             episode_date=date_str,
@@ -270,6 +326,11 @@ async def run_daily_pipeline(
                 error_kind="auth_error",
                 error_message=str(exc),
             )
+            await _notify(
+                "Pipeline Failed (NotebookLM Auth)",
+                f"Error: `{exc}`\nRefresh NotebookLM cookies or let local failover handle it.",
+                status="failure",
+            )
         return PipelineResult(
             episode_date=date_str,
             status="failed",
@@ -290,6 +351,11 @@ async def run_daily_pipeline(
                 source_node=node_id,
                 error_kind=error_kind,
                 error_message=str(exc),
+            )
+            await _notify(
+                f"Pipeline Failed ({error_kind})",
+                f"Error: `{exc}`",
+                status="failure",
             )
         return PipelineResult(
             episode_date=ep_date,

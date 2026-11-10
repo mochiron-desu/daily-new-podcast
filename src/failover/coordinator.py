@@ -12,6 +12,7 @@ import httpx
 
 from ..config import AppConfig, FailoverConfig, ScheduleConfig
 from ..memory import EpisodeRecord, StateDB
+from ..notifications import TelegramNotifier
 from ..pipeline import PipelineResult, run_daily_pipeline
 from ..publisher import PublisherBackend, build_publisher
 from ..utils import now_in_timezone
@@ -365,10 +366,20 @@ async def run_failover_check(
                 pass
 
     logger.warning("Failover activated on '%s' (reason=%s)", cfg.failover.node_id, reason)
+    tg = TelegramNotifier(cfg.telegram)
+    if not dry_run:
+        await tg.send_stage(
+            "Failover Triggered",
+            f"Local node `{cfg.failover.node_id}` taking over.\nReason: `{reason}`",
+            status="warning",
+            episode_date=ep_date,
+            node_id=cfg.failover.node_id,
+        )
     result = await run_daily_pipeline(
         cfg,
         db=state_db,
         publisher=pub,
+        notifier=tg,
         target_date=ep_date,
         dry_run=dry_run,
         force=False,

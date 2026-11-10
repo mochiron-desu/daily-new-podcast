@@ -97,6 +97,9 @@ def configure_logging(level: str = "INFO") -> None:
         handlers=[stdout_handler, stderr_handler],
         force=True,
     )
+    # Prevent httpx/httpcore from logging URLs that embed bot tokens or access_token params.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
 def build_uvicorn_log_config(level: str = "INFO") -> dict[str, Any]:

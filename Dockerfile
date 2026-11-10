@@ -16,6 +16,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY config.yaml ./
+COPY assets ./assets
 COPY src ./src
 
 RUN mkdir -p /app/storage/dossiers /app/storage/prompts /app/storage/episodes

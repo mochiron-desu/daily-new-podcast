@@ -1,16 +1,16 @@
 podcast:
   show_title: "Daily Morning Brief"
-  show_description: "Autonomous two-host daily briefing covering global news, technology, and developing story arcs."
+  show_description: "Concise daily briefing from reliable Indian media covering national news, international affairs, sports, and technology."
   author: "Suraj & AI Hosts"
   language: "en"
   episode_title_template: "Daily Brief — {date}"
-  audio_format: "deep-dive"   # deep-dive | brief | critique | debate
-  audio_length: "default"     # short | default | long
+  audio_format: "brief"       # deep-dive | brief | critique | debate
+  audio_length: "short"       # short | default | long
   mp3_bitrate: "192k"
   sample_rate: 44100
   target_lufs: -16.0
   intro_audio_path: ""        # Optional path to a 3-second intro chime .mp3/.wav
-  cover_art_path: ""          # Optional path to square cover image .jpg/.png
+  cover_art_path: "assets/cover.jpg"  # Square cover image .jpg/.png
   notebook_generation_timeout_seconds: 1800
   source_ready_timeout_seconds: 180
   delete_notebook_on_error: true
@@ -26,41 +26,72 @@ harvester:
   lookback_hours: 36
   min_articles_fallback: 12
   max_items_per_feed: 12
-  max_clusters: 18
-  top_headlines_count: 3
-  developing_stories_count: 6
+  max_clusters: 12
+  top_headlines_count: 4
+  developing_stories_count: 4
   cluster_similarity_threshold: 0.28
   arc_match_threshold: 0.22
   stale_arc_days: 7
   request_timeout_seconds: 15.0
 
 feeds:
-  - name: "BBC World"
-    category: "World"
-    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+  # --- National (India) ---
+  - name: "The Hindu - National"
+    category: "National"
+    url: "https://www.thehindu.com/news/national/feeder/default.rss"
     weight: 1.2
-  - name: "NPR World"
-    category: "World"
-    url: "https://feeds.npr.org/1004/rss.xml"
-    weight: 1.1
-  - name: "The Guardian World"
-    category: "World"
-    url: "https://www.theguardian.com/world/rss"
-    weight: 1.1
-  - name: "Hacker News"
-    category: "Tech"
-    url: "https://hnrss.org/frontpage"
+  - name: "Hindustan Times - India"
+    category: "National"
+    url: "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml"
     weight: 1.15
-  - name: "TechCrunch"
+  - name: "Indian Express - India"
+    category: "National"
+    url: "https://indianexpress.com/section/india/feed/"
+    weight: 1.1
+
+  # --- International ---
+  - name: "The Hindu - International"
+    category: "International"
+    url: "https://www.thehindu.com/news/international/feeder/default.rss"
+    weight: 1.2
+  - name: "Hindustan Times - World"
+    category: "International"
+    url: "https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml"
+    weight: 1.15
+  - name: "Indian Express - World"
+    category: "International"
+    url: "https://indianexpress.com/section/world/feed/"
+    weight: 1.1
+
+  # --- Sports ---
+  - name: "The Hindu - Sport"
+    category: "Sports"
+    url: "https://www.thehindu.com/sport/feeder/default.rss"
+    weight: 1.2
+  - name: "Sportstar"
+    category: "Sports"
+    url: "https://sportstar.thehindu.com/feeder/default.rss"
+    weight: 1.15
+  - name: "Hindustan Times - Sports"
+    category: "Sports"
+    url: "https://www.hindustantimes.com/feeds/rss/sports/rssfeed.xml"
+    weight: 1.1
+
+  # --- Tech ---
+  - name: "The Hindu - Sci-Tech"
     category: "Tech"
-    url: "https://techcrunch.com/feed/"
-    weight: 1.0
-  - name: "Ars Technica"
-    category: "Tech & Science"
-    url: "https://feeds.arstechnica.com/arstechnica/index"
-    weight: 1.0
-  - name: "ArXiv CS.AI"
-    category: "AI Research"
-    url: "https://rss.arxiv.org/rss/cs.AI"
-    weight: 0.9
+    url: "https://www.thehindu.com/sci-tech/technology/feeder/default.rss"
+    weight: 1.2
+  - name: "Livemint - Technology"
+    category: "Tech"
+    url: "https://www.livemint.com/rss/technology"
+    weight: 1.15
+  - name: "ET Tech"
+    category: "Tech"
+    url: "https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms"
+    weight: 1.15
+  - name: "Inc42"
+    category: "Tech"
+    url: "https://inc42.com/feed/"
+    weight: 1.05
 

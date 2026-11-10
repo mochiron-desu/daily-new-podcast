@@ -50,6 +50,7 @@ async def test_podbean_publisher_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     audio_file.write_bytes(b"ID3" + b"\x00" * 512)
 
     calls: list[tuple[str, str]] = []
+    posted_contents: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         calls.append((request.method, str(request.url)))
@@ -71,6 +72,10 @@ async def test_podbean_publisher_workflow(tmp_path: Path, monkeypatch: pytest.Mo
         if "s3.podbean.test" in str(request.url) and request.method == "PUT":
             return httpx.Response(200)
         if request.url.path.endswith("/episodes") and request.method == "POST":
+            from urllib.parse import parse_qs
+
+            form = parse_qs(request.content.decode("utf-8"))
+            posted_contents.append((form.get("content") or [""])[0])
             return httpx.Response(
                 200,
                 json={
@@ -99,12 +104,14 @@ async def test_podbean_publisher_workflow(tmp_path: Path, monkeypatch: pytest.Mo
     published = await pub.publish(
         audio_path=audio_file,
         title="Daily Brief — 2026-11-10",
-        description="Show notes",
+        description="Long show notes " * 60,
         episode_date=date(2026, 11, 10),
     )
     assert published.remote_id == "ep-2026-11-10"
     assert published.media_url == "https://cdn.podbean.test/2026-11-10.mp3"
     assert any(method == "PUT" for method, _ in calls)
+    assert len(posted_contents) == 1
+    assert len(posted_contents[0]) <= 500
 
 
 async def test_local_rss_publisher_creates_feed_xml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

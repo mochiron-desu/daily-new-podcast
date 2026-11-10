@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 from dataclasses import dataclass, field
@@ -105,6 +106,17 @@ class PodbeanConfig:
 
 
 @dataclass(frozen=True)
+class TelegramConfig:
+    bot_token: str = ""
+    chat_id: str = ""
+    source: str = "unconfigured"
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.bot_token and self.chat_id)
+
+
+@dataclass(frozen=True)
 class StorageConfig:
     root: Path
     db_path: Path
@@ -124,6 +136,7 @@ class AppConfig:
     failover: FailoverConfig
     notebooklm: NotebookLMConfig
     podbean: PodbeanConfig
+    telegram: TelegramConfig
     publisher_backend: str
     ffmpeg_bin: str
     feeds: tuple[FeedConfig, ...] = field(default_factory=tuple)
@@ -157,6 +170,37 @@ def _parse_url_list(raw: str) -> tuple[str, ...]:
         if cleaned:
             urls.append(cleaned)
     return tuple(urls)
+
+
+def _resolve_telegram_config() -> TelegramConfig:
+    """Resolve Telegram credentials from env/.env first, then telegram-notify config files."""
+    token = _env_str("TELEGRAM_BOT_TOKEN", "")
+    chat_id = _env_str("TELEGRAM_CHAT_ID", "")
+    if token and chat_id:
+        return TelegramConfig(bot_token=token, chat_id=chat_id, source="env")
+
+    candidates = (
+        Path.home() / ".gemini" / "config" / "skills" / "telegram-notify" / "config.json",
+        Path.home() / ".config" / "antigravity" / "telegram.json",
+    )
+    resolved_source = "env" if (token or chat_id) else "unconfigured"
+    for cfg_path in candidates:
+        if not cfg_path.is_file():
+            continue
+        try:
+            data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if not token:
+            token = str(data.get("bot_token") or data.get("token") or "").strip()
+        if not chat_id:
+            chat_id = str(data.get("chat_id") or "").strip()
+        if token and chat_id:
+            return TelegramConfig(bot_token=token, chat_id=chat_id, source=f"file:{cfg_path}")
+
+    return TelegramConfig(bot_token=token, chat_id=chat_id, source=resolved_source)
 
 
 def _load_yaml(config_path: Path) -> dict[str, Any]:
@@ -311,6 +355,7 @@ def load_config(
         publish_status=_env_str("PODBEAN_PUBLISH_STATUS", "publish") or "publish",
         episode_type=_env_str("PODBEAN_EPISODE_TYPE", "public") or "public",
     )
+    telegram = _resolve_telegram_config()
 
     publisher_backend = _env_str("PUBLISHER_BACKEND", "podbean").lower()
     if publisher_backend not in {"podbean", "local_rss"}:
@@ -338,6 +383,7 @@ def load_config(
         failover=failover,
         notebooklm=notebooklm,
         podbean=podbean,
+        telegram=telegram,
         publisher_backend=publisher_backend,
         ffmpeg_bin=_env_str("FFMPEG_BIN", "ffmpeg") or "ffmpeg",
         feeds=feeds,

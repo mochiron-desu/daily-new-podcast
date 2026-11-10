@@ -53,10 +53,14 @@ def test_story_arc_continuity_and_prompt(tmp_path: Path) -> None:
         matched_arcs=matched,
         clusters=[day2_cluster],
         prompts_dir=tmp_path / "prompts",
+        audio_format="brief",
+        audio_length="short",
     )
     assert prompt_path.is_file()
     assert "CONTEXT & CONTINUITY FROM PREVIOUS EPISODES" in prompt_text
     assert "Picking up where we left off" in prompt_text
+    assert "NO deep dives" in prompt_text
+    assert "Indian National news, International affairs, Sports, and Tech" in prompt_text
 
 
 def test_state_merge_prefers_published_and_newer_arcs(tmp_path: Path) -> None:
@@ -98,6 +102,9 @@ def test_lock_mutual_exclusion_and_release(tmp_path: Path) -> None:
     ok2, lock2 = db.acquire_lock("2026-11-10", node_id="node-b", node_priority=10, ttl_seconds=600)
     assert ok2 is False
     assert lock2.owner_node_id == "node-a"
+
+    ok_same, _ = db.acquire_lock("2026-11-10", node_id="node-a", node_priority=1, ttl_seconds=600)
+    assert ok_same is False
 
     assert db.release_lock("2026-11-10", "node-b") is False
     assert db.release_lock("2026-11-10", "node-a") is True

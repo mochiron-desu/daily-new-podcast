@@ -150,6 +150,42 @@ def _recency_bonus(published_at: datetime | None, reference_now: datetime) -> fl
     return 0.4
 
 
+def _select_balanced_clusters(
+    clusters: list[StoryCluster],
+    max_clusters: int,
+) -> list[StoryCluster]:
+    """Pick up to max_clusters via round-robin across categories, then sort by score."""
+    if max_clusters <= 0 or len(clusters) <= max_clusters:
+        return clusters[:max_clusters]
+
+    buckets: dict[str, list[StoryCluster]] = {}
+    for cluster in clusters:
+        buckets.setdefault(cluster.category, []).append(cluster)
+
+    # Order categories consistently, keeping any unseen categories at the end.
+    preferred_order = ["National", "International", "Sports", "Tech"]
+    ordered_categories = [c for c in preferred_order if c in buckets]
+    ordered_categories.extend(c for c in buckets if c not in ordered_categories)
+
+    selected: list[StoryCluster] = []
+    idx = 0
+    while len(selected) < max_clusters:
+        added_this_round = False
+        for category in ordered_categories:
+            bucket = buckets[category]
+            if idx < len(bucket):
+                selected.append(bucket[idx])
+                added_this_round = True
+                if len(selected) >= max_clusters:
+                    break
+        if not added_this_round:
+            break
+        idx += 1
+
+    selected.sort(key=lambda c: (c.score, bool(c.merged_summary)), reverse=True)
+    return selected
+
+
 def cluster_articles(
     articles: Iterable[NewsArticle],
     cfg: HarvesterConfig,
@@ -222,8 +258,8 @@ def cluster_articles(
                 )
             )
 
-    clusters.sort(key=lambda c: c.score, reverse=True)
-    return clusters[: cfg.max_clusters]
+    clusters.sort(key=lambda c: (c.score, bool(c.merged_summary)), reverse=True)
+    return _select_balanced_clusters(clusters, cfg.max_clusters)
 
 
 async def harvest_feeds(

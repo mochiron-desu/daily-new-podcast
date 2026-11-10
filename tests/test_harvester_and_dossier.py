@@ -8,7 +8,7 @@ from pathlib import Path
 from src.config import FeedConfig, HarvesterConfig
 from src.harvester import build_dossier, cluster_articles
 from src.harvester.dossier_builder import MatchedArcContext
-from src.harvester.rss_fetcher import parse_feed_xml
+from src.harvester.rss_fetcher import NewsArticle, parse_feed_xml
 
 SAMPLE_RSS = b"""<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
@@ -87,4 +87,43 @@ def test_parse_cluster_and_build_dossier(tmp_path: Path) -> None:
     assert artifacts.pdf_path.read_bytes().startswith(b"%PDF")
     assert "Developing Story Arcs" in artifacts.markdown_text
     assert "Senate AI Safety Bill" in artifacts.markdown_text
+
+
+def test_cluster_articles_balances_all_four_categories() -> None:
+    now = datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc)
+    articles: list[NewsArticle] = []
+    # High-weight National articles would starve other categories without balancing.
+    for idx in range(6):
+        articles.append(
+            NewsArticle(
+                title=f"Parliament session update item {idx}",
+                summary=f"National policy details {idx}.",
+                url=f"https://example.com/nat/{idx}",
+                source_name="National Daily",
+                category="National",
+                published_at=now,
+                weight=2.0,
+                keywords={f"nat{idx}", "parliament", "policy"},
+            )
+        )
+    for cat in ("International", "Sports", "Tech"):
+        for idx in range(3):
+            articles.append(
+                NewsArticle(
+                    title=f"{cat} unique headline {idx}",
+                    summary=f"{cat} summary {idx}.",
+                    url=f"https://example.com/{cat.lower()}/{idx}",
+                    source_name=f"{cat} Desk",
+                    category=cat,
+                    published_at=now,
+                    weight=1.0,
+                    keywords={cat.lower(), f"topic{idx}", f"item{idx}"},
+                )
+            )
+
+    cfg = HarvesterConfig(max_clusters=8, cluster_similarity_threshold=0.8)
+    clusters = cluster_articles(articles, cfg, reference_now=now)
+    assert len(clusters) == 8
+    cats = {c.category for c in clusters}
+    assert cats == {"National", "International", "Sports", "Tech"}
 
