@@ -19,7 +19,7 @@ from .pipeline import run_daily_pipeline
 from .processor import AudioMasteringError, resolve_ffmpeg_binary
 from .producer import check_notebooklm_auth
 from .publisher import build_publisher
-from .utils import configure_logging, now_in_timezone
+from .utils import build_uvicorn_log_config, configure_logging, now_in_timezone
 
 
 def _parse_date(raw: str | None) -> date | None:
@@ -163,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host or cfg.failover.host,
             port=args.port or cfg.failover.port,
             log_level=args.log_level.lower(),
+            log_config=build_uvicorn_log_config(args.log_level),
         )
         return 0
 

@@ -293,3 +293,24 @@ def test_cli_help_and_status(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert main(["status"]) == 0
 
 
+def test_logging_splits_stdout_and_stderr(capsys: pytest.CaptureFixture[str]) -> None:
+    import logging
+    from src.utils import build_uvicorn_log_config, configure_logging
+
+    configure_logging("INFO")
+    test_logger = logging.getLogger("tests.log_split")
+    test_logger.info("normal info message")
+    test_logger.warning("important warning message")
+
+    captured = capsys.readouterr()
+    assert "normal info message" in captured.out
+    assert "normal info message" not in captured.err
+    assert "important warning message" in captured.err
+    assert "important warning message" not in captured.out
+
+    uv_cfg = build_uvicorn_log_config("INFO")
+    assert uv_cfg["handlers"]["default"]["stream"] == "ext://sys.stdout"
+    assert uv_cfg["handlers"]["default_err"]["stream"] == "ext://sys.stderr"
+
+
+

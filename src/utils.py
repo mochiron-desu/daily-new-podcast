@@ -67,16 +67,68 @@ def reconfigure_stdio_utf8() -> None:
                 pass
 
 
+class _BelowWarningFilter(logging.Filter):
+    """Allow only log records below WARNING (DEBUG/INFO) onto stdout."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno < logging.WARNING
+
+
 def configure_logging(level: str = "INFO") -> None:
-    """Initialize structured console logging safely across Linux and Windows."""
+    """Route DEBUG/INFO logs to stdout and WARNING+ to stderr for clean cloud log tagging."""
     reconfigure_stdio_utf8()
     numeric_level = getattr(logging, level.upper(), logging.INFO)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(numeric_level)
+    stdout_handler.addFilter(_BelowWarningFilter())
+    stdout_handler.setFormatter(formatter)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(max(numeric_level, logging.WARNING))
+    stderr_handler.setFormatter(formatter)
+
     logging.basicConfig(
         level=numeric_level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[stdout_handler, stderr_handler],
         force=True,
     )
+
+
+def build_uvicorn_log_config(level: str = "INFO") -> dict[str, Any]:
+    """Return uvicorn LOGGING_CONFIG routing INFO lifecycle logs to stdout instead of stderr."""
+    import copy
+    from uvicorn.config import LOGGING_CONFIG
+
+    cfg = copy.deepcopy(LOGGING_CONFIG)
+    upper_level = level.upper()
+    cfg["filters"] = {
+        "below_warning": {"()": f"{__name__}._BelowWarningFilter"},
+    }
+    cfg["handlers"]["default"] = {
+        "formatter": "default",
+        "class": "logging.StreamHandler",
+        "stream": "ext://sys.stdout",
+        "filters": ["below_warning"],
+    }
+    cfg["handlers"]["default_err"] = {
+        "formatter": "default",
+        "class": "logging.StreamHandler",
+        "stream": "ext://sys.stderr",
+        "level": "WARNING",
+    }
+    cfg["loggers"]["uvicorn"] = {
+        "handlers": ["default", "default_err"],
+        "level": upper_level,
+        "propagate": False,
+    }
+    cfg["loggers"]["uvicorn.error"] = {"level": upper_level}
+    cfg["loggers"]["uvicorn.access"]["level"] = upper_level
+    return cfg
 
 
 def subprocess_silent_kwargs() -> dict[str, Any]:
