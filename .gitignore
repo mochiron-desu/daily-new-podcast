@@ -1,13 +1,19 @@
 # Environments
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
 
-# Local storage & data
+# Local storage & runtime data
 storage/
 *.sqlite
 *.sqlite3
 *.db
+*.lock
+*.log
 
 # Media files
 *.m4a
@@ -17,6 +23,7 @@ storage/
 # Secrets & environment
 .env
 .env.local
+notebooklm_storage_state.json
 
 # Documentation
 PRD.md
