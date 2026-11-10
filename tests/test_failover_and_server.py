@@ -66,12 +66,13 @@ def test_evaluate_failover_need_rules() -> None:
     assert should is True
     assert reason == "primary_failed:auth_error"
 
-    # 4. Primary already published -> skip
+    # 4. Primary already published -> skip (even with force=True cutoff override)
     should, reason = evaluate_failover_need(
         primary_status=PeerStatus(url="https://rail", reachable=True, today_status="published"),
         local_episode=None,
         now_local=datetime(2026, 11, 10, 7, 0, tzinfo=tz),
         schedule_cfg=sched,
+        force=True,
     )
     assert should is False
     assert reason == "primary_published"

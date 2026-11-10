@@ -127,7 +127,13 @@ async def _fetch_single_feed(
         logger.info("Fetched %d item(s) from %s", len(articles), feed.name)
         return articles
     except Exception as exc:
-        logger.warning("Failed to fetch feed '%s' (%s): %s", feed.name, feed.url, exc)
+        logger.warning(
+            "Failed to fetch feed '%s' (%s): %s: %s",
+            feed.name,
+            feed.url,
+            type(exc).__name__,
+            exc,
+        )
         return []
 
 

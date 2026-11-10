@@ -163,16 +163,20 @@ def evaluate_failover_need(
     schedule_cfg: ScheduleConfig,
     force: bool = False,
 ) -> tuple[bool, str]:
-    """Pure decision rule determining whether local fallback should activate."""
-    if local_episode is not None and local_episode.status == "published" and not force:
+    """Pure decision rule determining whether local fallback should activate.
+
+    ``force=True`` bypasses the morning cutoff window when Railway is down or idle,
+    but never overrides an already-published or actively-running episode.
+    """
+    if local_episode is not None and local_episode.status == "published":
         return False, "already_published_locally"
 
     if primary_status is not None and primary_status.reachable:
-        if primary_status.today_status == "published" and not force:
+        if primary_status.today_status == "published":
             return False, "primary_published"
-        if primary_status.today_status == "running" and not force:
+        if primary_status.today_status == "running":
             return False, "primary_running"
-        if primary_status.lock_owner and not force:
+        if primary_status.lock_owner:
             return False, f"primary_locked_by:{primary_status.lock_owner}"
         if primary_status.today_status == "failed":
             detail = primary_status.error_kind or "error"
@@ -367,7 +371,7 @@ async def run_failover_check(
         publisher=pub,
         target_date=ep_date,
         dry_run=dry_run,
-        force=force,
+        force=False,
     )
 
     # 5. Push updated state back to Railway (if up) and all reachable peers
