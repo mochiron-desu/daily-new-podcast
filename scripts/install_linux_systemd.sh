@@ -32,7 +32,10 @@ cat > "$UNIT_DIR/daily-news-podcast-failover.timer" <<EOF
 Description=Run Daily News Podcast Failover Check (morning cutoff + wake catch-up)
 
 [Timer]
-OnCalendar=*-*-* 06:20,06:35,06:50,07:15:00
+OnCalendar=*-*-* 06:20:00
+OnCalendar=*-*-* 06:35:00
+OnCalendar=*-*-* 06:50:00
+OnCalendar=*-*-* 07:15:00
 Persistent=true
 AccuracySec=1min
 
@@ -41,7 +44,11 @@ WantedBy=timers.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable --now daily-news-podcast-failover.timer
+if command -v systemd-analyze >/dev/null 2>&1; then
+    systemd-analyze --user verify "$UNIT_DIR/daily-news-podcast-failover.timer"
+fi
+systemctl --user enable daily-news-podcast-failover.timer
+systemctl --user restart daily-news-podcast-failover.timer
 echo "[OK] Installed and enabled daily-news-podcast-failover.timer"
 
 if [[ "$WITH_STANDBY" == "--with-standby" ]]; then
