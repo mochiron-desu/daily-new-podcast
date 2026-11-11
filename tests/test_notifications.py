@@ -98,3 +98,52 @@ async def test_telegram_notifier_sends_and_swallows_errors(monkeypatch: pytest.M
     )
     assert await notifier.send_stage("Published", "Done", status="success") is False
 
+
+async def test_telegram_notifier_send_audio_and_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sent_requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent_requests.append(request.url.path)
+        if request.url.path.endswith("/sendAudio") or request.url.path.endswith("/sendDocument"):
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(500)
+
+    transport = httpx.MockTransport(handler)
+    orig_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: orig_client(transport=transport, *args, **kwargs),
+    )
+
+    tg_cfg = TelegramConfig(bot_token="123:XYZ", chat_id="555", source="env", send_artifacts=True)
+    notifier = TelegramNotifier(tg_cfg)
+
+    audio_file = tmp_path / "test.mp3"
+    audio_file.write_bytes(b"dummy audio content")
+    doc_file = tmp_path / "dossier.pdf"
+    doc_file.write_bytes(b"%PDF-1.4 dummy pdf content")
+
+    audio_ok = await notifier.send_audio(
+        audio_file,
+        caption="Test Episode",
+        title="Episode 1",
+        performer="Daily News Podcast",
+    )
+    assert audio_ok is True
+    assert any("/sendAudio" in p for p in sent_requests)
+
+    doc_ok = await notifier.send_document(
+        doc_file,
+        caption="News Dossier",
+    )
+    assert doc_ok is True
+    assert any("/sendDocument" in p for p in sent_requests)
+
+    # Missing file returns False without raising
+    non_existent = tmp_path / "missing.mp3"
+    assert await notifier.send_audio(non_existent) is False
+    assert await notifier.send_document(non_existent) is False
+

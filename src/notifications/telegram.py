@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -86,6 +88,68 @@ class TelegramNotifier:
             return await self._post_message(message, parse_mode="Markdown")
         except Exception as exc:
             logger.warning("Telegram notification skipped (%s): %s", stage, exc)
+            return False
+
+    async def send_audio(
+        self,
+        audio_path: Path,
+        *,
+        caption: str = "",
+        title: str = "",
+        performer: str = "",
+        timeout_seconds: float = 60.0,
+    ) -> bool:
+        """Send an audio file (.mp3) via Telegram Bot API sendAudio."""
+        if not self.enabled or not audio_path.is_file():
+            return False
+
+        url = f"https://api.telegram.org/bot{self.cfg.bot_token}/sendAudio"
+        data: dict[str, Any] = {"chat_id": self.cfg.chat_id}
+        if caption:
+            data["caption"] = caption[:1024]
+        if title:
+            data["title"] = title
+        if performer:
+            data["performer"] = performer
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                with open(audio_path, "rb") as f:
+                    files = {"audio": (audio_path.name, f, "audio/mpeg")}
+                    res = await client.post(url, data=data, files=files)
+                    res.raise_for_status()
+                    data_json = res.json()
+                    return bool(data_json.get("ok"))
+        except Exception as exc:
+            logger.warning("Telegram sendAudio skipped (%s): %s", audio_path.name, exc)
+            return False
+
+    async def send_document(
+        self,
+        document_path: Path,
+        *,
+        caption: str = "",
+        timeout_seconds: float = 60.0,
+    ) -> bool:
+        """Send a document file (.pdf, .txt, .md) via Telegram Bot API sendDocument."""
+        if not self.enabled or not document_path.is_file():
+            return False
+
+        url = f"https://api.telegram.org/bot{self.cfg.bot_token}/sendDocument"
+        data: dict[str, Any] = {"chat_id": self.cfg.chat_id}
+        if caption:
+            data["caption"] = caption[:1024]
+
+        try:
+            async with httpx.AsyncClient(timeout=timeout_seconds) as client:
+                with open(document_path, "rb") as f:
+                    files = {"document": (document_path.name, f, "application/octet-stream")}
+                    res = await client.post(url, data=data, files=files)
+                    res.raise_for_status()
+                    data_json = res.json()
+                    return bool(data_json.get("ok"))
+        except Exception as exc:
+            logger.warning("Telegram sendDocument skipped (%s): %s", document_path.name, exc)
             return False
 
 

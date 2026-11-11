@@ -302,6 +302,36 @@ async def run_daily_pipeline(
             status="success",
         )
 
+        # 8. Send generated artifacts via Telegram (if enabled)
+        if cfg.telegram.send_artifacts and tg.enabled:
+            logger.info("Sending podcast media and dossier artifacts via Telegram for %s", date_str)
+            if mastered_mp3.is_file():
+                await tg.send_audio(
+                    mastered_mp3,
+                    title=published.title,
+                    performer=cfg.podcast.show_title,
+                    caption=f"🎙️ *{published.title}*",
+                )
+            if dossier.pdf_path.is_file():
+                await tg.send_document(
+                    dossier.pdf_path,
+                    caption=f"📄 News Brief Dossier ({date_str})",
+                )
+            if prompt_path.is_file():
+                await tg.send_document(
+                    prompt_path,
+                    caption=f"📝 NotebookLM Continuity Prompt ({date_str})",
+                )
+
+        # 9. Clean up generated media/build artifacts to save volume storage
+        if cfg.storage.cleanup_after_publish:
+            logger.info("Cleaning up generated build artifacts for %s from storage", date_str)
+            if cfg.publisher_backend != "local_rss":
+                mastered_mp3.unlink(missing_ok=True)
+            dossier.pdf_path.unlink(missing_ok=True)
+            dossier.markdown_path.unlink(missing_ok=True)
+            prompt_path.unlink(missing_ok=True)
+
         logger.info("Pipeline completed successfully for %s on node '%s'", date_str, node_id)
         return PipelineResult(
             episode_date=date_str,

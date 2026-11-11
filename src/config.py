@@ -110,6 +110,7 @@ class TelegramConfig:
     bot_token: str = ""
     chat_id: str = ""
     source: str = "unconfigured"
+    send_artifacts: bool = True
 
     @property
     def enabled(self) -> bool:
@@ -124,6 +125,7 @@ class StorageConfig:
     prompts_dir: Path
     episodes_dir: Path
     feed_xml_path: Path
+    cleanup_after_publish: bool = True
 
 
 @dataclass(frozen=True)
@@ -163,6 +165,13 @@ def _env_int(name: str, default: int) -> int:
     return int(raw.strip())
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _parse_url_list(raw: str) -> tuple[str, ...]:
     urls: list[str] = []
     for entry in raw.split(","):
@@ -176,8 +185,14 @@ def _resolve_telegram_config() -> TelegramConfig:
     """Resolve Telegram credentials from env/.env first, then telegram-notify config files."""
     token = _env_str("TELEGRAM_BOT_TOKEN", "")
     chat_id = _env_str("TELEGRAM_CHAT_ID", "")
+    send_artifacts = _env_bool("TELEGRAM_SEND_ARTIFACTS", True)
     if token and chat_id:
-        return TelegramConfig(bot_token=token, chat_id=chat_id, source="env")
+        return TelegramConfig(
+            bot_token=token,
+            chat_id=chat_id,
+            source="env",
+            send_artifacts=send_artifacts,
+        )
 
     candidates = (
         Path.home() / ".gemini" / "config" / "skills" / "telegram-notify" / "config.json",
@@ -198,9 +213,19 @@ def _resolve_telegram_config() -> TelegramConfig:
         if not chat_id:
             chat_id = str(data.get("chat_id") or "").strip()
         if token and chat_id:
-            return TelegramConfig(bot_token=token, chat_id=chat_id, source=f"file:{cfg_path}")
+            return TelegramConfig(
+                bot_token=token,
+                chat_id=chat_id,
+                source=f"file:{cfg_path}",
+                send_artifacts=send_artifacts,
+            )
 
-    return TelegramConfig(bot_token=token, chat_id=chat_id, source=resolved_source)
+    return TelegramConfig(
+        bot_token=token,
+        chat_id=chat_id,
+        source=resolved_source,
+        send_artifacts=send_artifacts,
+    )
 
 
 def _load_yaml(config_path: Path) -> dict[str, Any]:
@@ -246,6 +271,7 @@ def load_config(
         prompts_dir=storage_root / "prompts",
         episodes_dir=storage_root / "episodes",
         feed_xml_path=storage_root / "feed.xml",
+        cleanup_after_publish=_env_bool("STORAGE_CLEANUP_AFTER_PUBLISH", True),
     )
 
     podcast = PodcastConfig(
