@@ -1,0 +1,79 @@
+name: Trigger Daily Podcast
+
+on:
+  schedule:
+    # 05:55 AM IST (00:25 UTC) daily
+    - cron: '25 0 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+
+jobs:
+  trigger-and-monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Trigger Pipeline on Railway
+        id: trigger
+        env:
+          APP_URL: ${{ secrets.RAILWAY_APP_URL || 'https://daily-news-podcast-production-325a.up.railway.app' }}
+          API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+        run: |
+          echo "Waking Railway container and triggering daily podcast pipeline..."
+
+          if [ -z "$API_TOKEN" ]; then
+            echo "::error::RAILWAY_API_TOKEN secret is missing or empty."
+            exit 1
+          fi
+
+          # Initial call can take ~10-15s if Railway is cold-starting the container
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            --retry 3 \
+            --retry-delay 5 \
+            -X POST "$APP_URL/api/run" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"reason": "github_actions_cron"}')
+
+          echo "Response:"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -ne 202 ] && [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Failed to trigger pipeline. HTTP Status: $HTTP_STATUS"
+            exit 1
+          fi
+          echo "Pipeline accepted successfully."
+
+      - name: Keepalive & Wait for Completion
+        env:
+          APP_URL: ${{ secrets.RAILWAY_APP_URL || 'https://daily-news-podcast-production-325a.up.railway.app' }}
+        run: |
+          echo "Monitoring progress and sending keepalive pings..."
+          MAX_MINUTES=25
+          INTERVAL=60
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $((MAX_MINUTES * 60)) ]; do
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+
+            # Poll /health every minute to keep Railway from going to sleep
+            HEALTH_JSON=$(curl -fsSL --connect-timeout 10 --max-time 15 "$APP_URL/health" 2>/dev/null || echo "{}")
+            STATUS=$(echo "$HEALTH_JSON" | jq -r '.today_status // "unknown"')
+
+            echo "[$((ELAPSED / 60))m elapsed] Status: $STATUS"
+
+            if [ "$STATUS" = "published" ]; then
+              echo "✅ Podcast successfully generated and published!"
+              exit 0
+            elif [ "$STATUS" = "failed" ]; then
+              echo "::error::Pipeline failed during generation."
+              exit 1
+            fi
+          done
+
+          echo "::error::Reached $MAX_MINUTES minute timeout before completion."
+          exit 1
+
