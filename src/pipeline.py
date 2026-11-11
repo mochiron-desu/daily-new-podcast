@@ -35,6 +35,30 @@ class PipelineResult:
     error_message: str = ""
 
 
+def prune_storage_artifacts(storage: Any, *, preserve_mp3: bool = False) -> int:
+    """Remove historical dossiers, prompts, and optionally mp3 episodes to save volume disk."""
+    deleted = 0
+    dirs_to_clean = [
+        getattr(storage, "dossiers_dir", None),
+        getattr(storage, "prompts_dir", None),
+    ]
+    for folder in dirs_to_clean:
+        if folder is not None and Path(folder).is_dir():
+            for item in Path(folder).iterdir():
+                if item.is_file():
+                    item.unlink(missing_ok=True)
+                    deleted += 1
+
+    episodes_dir = getattr(storage, "episodes_dir", None)
+    if not preserve_mp3 and episodes_dir is not None and Path(episodes_dir).is_dir():
+        for item in Path(episodes_dir).iterdir():
+            if item.is_file() and item.suffix in {".mp3", ".m4a"}:
+                item.unlink(missing_ok=True)
+                deleted += 1
+
+    return deleted
+
+
 def _build_episode_description(
     episode_date: date,
     show_title: str,
@@ -326,11 +350,11 @@ async def run_daily_pipeline(
         # 9. Clean up generated media/build artifacts to save volume storage
         if cfg.storage.cleanup_after_publish:
             logger.info("Cleaning up generated build artifacts for %s from storage", date_str)
-            if cfg.publisher_backend != "local_rss":
-                mastered_mp3.unlink(missing_ok=True)
-            dossier.pdf_path.unlink(missing_ok=True)
-            dossier.markdown_path.unlink(missing_ok=True)
-            prompt_path.unlink(missing_ok=True)
+            pruned_count = prune_storage_artifacts(
+                cfg.storage,
+                preserve_mp3=(cfg.publisher_backend == "local_rss"),
+            )
+            logger.info("Pruned %d storage artifacts", pruned_count)
 
         logger.info("Pipeline completed successfully for %s on node '%s'", date_str, node_id)
         return PipelineResult(

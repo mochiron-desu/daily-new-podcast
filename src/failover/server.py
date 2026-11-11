@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from ..config import AppConfig
 from ..memory import StateDB
-from ..pipeline import run_daily_pipeline
+from ..pipeline import prune_storage_artifacts, run_daily_pipeline
 from ..publisher import build_publisher
 from ..utils import now_in_timezone
 from .coordinator import (
@@ -161,6 +161,13 @@ def create_app(
     async def lifespan(app: FastAPI):
         app.state.started_at = time.monotonic()
         app.state.running_task = None
+        if cfg.storage.cleanup_after_publish:
+            pruned = prune_storage_artifacts(
+                cfg.storage,
+                preserve_mp3=(cfg.publisher_backend == "local_rss"),
+            )
+            if pruned > 0:
+                logger.info("Startup volume cleanup pruned %d historical artifacts", pruned)
         scheduler_task: asyncio.Task[None] | None = None
         if not cfg.failover.api_token:
             logger.warning("API_TOKEN is empty; non-loopback /api/* calls will be rejected.")
