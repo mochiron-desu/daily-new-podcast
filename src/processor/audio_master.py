@@ -41,36 +41,49 @@ def build_ffmpeg_command(
     episode_date: date,
     podcast_cfg: PodcastConfig,
 ) -> list[str]:
-    """Build cross-platform ffmpeg command for normalization, optional intro, and ID3 tags."""
+    """Build cross-platform ffmpeg command for normalization, optional intro/outro jingles, and ID3 tags."""
     cmd: list[str] = [ffmpeg_path, "-y", "-hide_banner", "-loglevel", "error"]
     has_intro = bool(podcast_cfg.intro_audio_path and podcast_cfg.intro_audio_path.is_file())
+    has_outro = bool(podcast_cfg.outro_audio_path and podcast_cfg.outro_audio_path.is_file())
     has_cover = bool(podcast_cfg.cover_art_path and podcast_cfg.cover_art_path.is_file())
 
     loudnorm_filter = f"loudnorm=I={podcast_cfg.target_lufs}:TP=-1.5:LRA=11"
     sr = podcast_cfg.sample_rate
 
+    # Sequence of audio inputs: [intro?], raw_audio, [outro?]
+    audio_inputs: list[Path] = []
     if has_intro:
         assert podcast_cfg.intro_audio_path is not None
-        cmd.extend(["-i", str(podcast_cfg.intro_audio_path), "-i", str(raw_audio_path)])
-        if has_cover:
-            assert podcast_cfg.cover_art_path is not None
-            cmd.extend(["-i", str(podcast_cfg.cover_art_path)])
-        filter_complex = (
-            f"[0:a]{loudnorm_filter},aresample={sr},aformat=channel_layouts=stereo[a0];"
-            f"[1:a]{loudnorm_filter},aresample={sr},aformat=channel_layouts=stereo[a1];"
-            "[a0][a1]concat=n=2:v=0:a=1[aout]"
-        )
-        cmd.extend(["-filter_complex", filter_complex, "-map", "[aout]"])
-        if has_cover:
-            cmd.extend(["-map", "2:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
+        audio_inputs.append(podcast_cfg.intro_audio_path)
+    audio_inputs.append(raw_audio_path)
+    if has_outro:
+        assert podcast_cfg.outro_audio_path is not None
+        audio_inputs.append(podcast_cfg.outro_audio_path)
+
+    for p in audio_inputs:
+        cmd.extend(["-i", str(p)])
+
+    cover_index: int | None = None
+    if has_cover:
+        assert podcast_cfg.cover_art_path is not None
+        cover_index = len(audio_inputs)
+        cmd.extend(["-i", str(podcast_cfg.cover_art_path)])
+
+    if len(audio_inputs) > 1:
+        filter_parts: list[str] = []
+        concat_inputs: list[str] = []
+        for i in range(len(audio_inputs)):
+            filter_parts.append(
+                f"[{i}:a]{loudnorm_filter},aresample={sr},aformat=channel_layouts=stereo[a{i}]"
+            )
+            concat_inputs.append(f"[a{i}]")
+        filter_parts.append(f"{''.join(concat_inputs)}concat=n={len(audio_inputs)}:v=0:a=1[aout]")
+        cmd.extend(["-filter_complex", ";".join(filter_parts), "-map", "[aout]"])
     else:
-        cmd.extend(["-i", str(raw_audio_path)])
-        if has_cover:
-            assert podcast_cfg.cover_art_path is not None
-            cmd.extend(["-i", str(podcast_cfg.cover_art_path)])
         cmd.extend(["-af", loudnorm_filter, "-map", "0:a"])
-        if has_cover:
-            cmd.extend(["-map", "1:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
+
+    if cover_index is not None:
+        cmd.extend(["-map", f"{cover_index}:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
 
     cmd.extend(
         [

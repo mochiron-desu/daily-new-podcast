@@ -9,7 +9,8 @@ podcast:
   mp3_bitrate: "192k"
   sample_rate: 44100
   target_lufs: -16.0
-  intro_audio_path: ""        # Optional path to a 3-second intro chime .mp3/.wav
+  intro_audio_path: "assets/intro_jingle.mp3"  # Optional path to an intro chime .mp3/.wav
+  outro_audio_path: "assets/outro_jingle.mp3"  # Optional path to an outro chime .mp3/.wav
   cover_art_path: "assets/cover.jpg"  # Square cover image .jpg/.png
   notebook_generation_timeout_seconds: 1800
   source_ready_timeout_seconds: 180

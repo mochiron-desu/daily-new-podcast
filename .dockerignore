@@ -11,6 +11,8 @@ storage
 *.m4a
 *.mp3
 *.wav
+!assets/*.mp3
+!assets/*.wav
 *.log
 .env
 .env.local

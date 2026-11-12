@@ -36,6 +36,7 @@ class PodcastConfig:
     sample_rate: int = 44100
     target_lufs: float = -16.0
     intro_audio_path: Path | None = None
+    outro_audio_path: Path | None = None
     cover_art_path: Path | None = None
     notebook_generation_timeout_seconds: int = 1800
     source_ready_timeout_seconds: int = 180
@@ -288,6 +289,7 @@ def load_config(
         sample_rate=int(pod_raw.get("sample_rate", PodcastConfig.sample_rate)),
         target_lufs=float(pod_raw.get("target_lufs", PodcastConfig.target_lufs)),
         intro_audio_path=_resolve_optional_path(pod_raw.get("intro_audio_path"), resolved_base),
+        outro_audio_path=_resolve_optional_path(pod_raw.get("outro_audio_path"), resolved_base),
         cover_art_path=_resolve_optional_path(pod_raw.get("cover_art_path"), resolved_base),
         notebook_generation_timeout_seconds=int(
             pod_raw.get(

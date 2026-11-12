@@ -45,6 +45,54 @@ def test_ffmpeg_master_real_audio(tmp_path: Path) -> None:
     assert mastered.stat().st_size > 1000
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg binary not installed")
+def test_ffmpeg_master_with_intro_and_outro(tmp_path: Path) -> None:
+    intro_wav = tmp_path / "intro.wav"
+    raw_wav = tmp_path / "raw.wav"
+    outro_wav = tmp_path / "outro.wav"
+    out_mp3 = tmp_path / "episodes" / "2026-11-10_jingles.mp3"
+
+    for p, freq in [(intro_wav, 523.25), (raw_wav, 440.0), (outro_wav, 349.23)]:
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                f"sine=frequency={freq}:duration=0.5",
+                str(p),
+            ],
+            check=True,
+            capture_output=True,
+        )
+
+    # Test intro + raw + outro
+    cfg = PodcastConfig(intro_audio_path=intro_wav, outro_audio_path=outro_wav)
+    mastered = master_episode_audio(
+        raw_audio_path=raw_wav,
+        output_mp3_path=out_mp3,
+        episode_title="Daily Brief with Jingles",
+        episode_date=date(2026, 11, 10),
+        podcast_cfg=cfg,
+    )
+    assert mastered.is_file()
+    assert mastered.stat().st_size > 1000
+
+    # Test outro alone
+    out_outro_mp3 = tmp_path / "episodes" / "2026-11-10_outro_only.mp3"
+    cfg_outro = PodcastConfig(outro_audio_path=outro_wav)
+    mastered_outro = master_episode_audio(
+        raw_audio_path=raw_wav,
+        output_mp3_path=out_outro_mp3,
+        episode_title="Daily Brief Outro Only",
+        episode_date=date(2026, 11, 10),
+        podcast_cfg=cfg_outro,
+    )
+    assert mastered_outro.is_file()
+    assert mastered_outro.stat().st_size > 1000
+
+
 async def test_podbean_publisher_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     audio_file = tmp_path / "2026-11-10.mp3"
     audio_file.write_bytes(b"ID3" + b"\x00" * 512)
