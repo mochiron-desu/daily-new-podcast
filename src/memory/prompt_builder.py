@@ -92,14 +92,14 @@ def build_continuity_prompt(
             )
         lines.append("")
 
-    top_headlines = [c.headline for c in clusters[:4]]
-    if top_headlines:
-        lines.append("TODAY'S TOP HEADLINES TO ANCHOR THE BRIEFING:")
-        for idx, headline in enumerate(top_headlines, start=1):
-            lines.append(f"{idx}. {headline}")
-        lines.append("")
-
     if is_brief:
+        top_headlines = [c.headline for c in clusters[:4]]
+        if top_headlines:
+            lines.append("TODAY'S TOP HEADLINES TO ANCHOR THE BRIEFING:")
+            for idx, headline in enumerate(top_headlines, start=1):
+                lines.append(f"{idx}. {headline}")
+            lines.append("")
+
         lines.extend(
             [
                 "DELIVERY INSTRUCTIONS:",
@@ -111,15 +111,45 @@ def build_continuity_prompt(
             ]
         )
     else:
+        # Full deep-dive podcast instructions with rich coverage across all beats
+        nat_clusters = [c for c in clusters if c.category == "National"]
+        intl_clusters = [c for c in clusters if c.category == "International"]
+        sports_clusters = [c for c in clusters if c.category == "Sports"]
+        tech_clusters = [c for c in clusters if c.category == "Tech"]
+
+        lines.append("CURATED STORIES TO COVER IN TODAY'S EPISODE:")
+        if nat_clusters:
+            lines.append("\n[Beat 1: Indian National & Regional Affairs — Security, Politics, Incidents]")
+            for c in nat_clusters[:8]:
+                detail = f" ({c.merged_summary[:120]}...)" if c.merged_summary else ""
+                lines.append(f"• {c.headline}{detail}")
+
+        if intl_clusters:
+            lines.append("\n[Beat 2: International Affairs & Geopolitics]")
+            for c in intl_clusters[:5]:
+                detail = f" ({c.merged_summary[:100]}...)" if c.merged_summary else ""
+                lines.append(f"• {c.headline}{detail}")
+
+        if sports_clusters:
+            lines.append("\n[Beat 3: Sports]")
+            for c in sports_clusters[:4]:
+                lines.append(f"• {c.headline}")
+
+        if tech_clusters:
+            lines.append("\n[Beat 4: Technology & Business]")
+            for c in tech_clusters[:4]:
+                lines.append(f"• {c.headline}")
+        lines.append("")
+
         lines.extend(
             [
-                "HOST INSTRUCTIONS:",
-                "1. For developing stories listed above, seamlessly bridge from prior coverage: "
-                '"Picking up where we left off on [topic]..." before explaining today\'s new update.',
-                "2. For brand-new top stories, introduce them clearly as breaking developments and explain why they matter.",
-                "3. Cover Indian National news, International news, Sports, and Tech in a cohesive flow.",
-                "4. Keep the conversation natural, sharp, and listener-friendly; avoid reading bullet lists robotically.",
-                "5. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak as seasoned news hosts.",
+                "HOST & PRESENTATION INSTRUCTIONS:",
+                "1. Deliver a comprehensive, engaging two-host morning briefing podcast (~8-12 minutes). Do NOT stop after only 2-3 stories.",
+                "2. Lead strongly with Indian National & Regional news: give breaking security/terror reports, state politics, accidents, and economic/civic developments substantive and thoughtful coverage.",
+                "3. Transition smoothly into International developments, and round out the show with highlights in Sports and Technology.",
+                '4. For developing stories listed in the continuity section above, bridge naturally: "Picking up where we left off on [topic]..." before discussing the latest.',
+                "5. Have a genuine, dynamic two-host rapport: discuss why stories matter, offer clear context, and avoid robotically reading bullet lists.",
+                "6. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak as seasoned, authentic broadcast journalists.",
             ]
         )
 

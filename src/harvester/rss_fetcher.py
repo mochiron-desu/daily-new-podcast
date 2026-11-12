@@ -33,6 +33,7 @@ class NewsArticle:
     published_at: datetime | None
     weight: float = 1.0
     keywords: frozenset[str] = field(default_factory=frozenset)
+    title_keywords: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass
@@ -46,6 +47,7 @@ class StoryCluster:
     keywords: set[str]
     score: float
     latest_published: datetime | None
+    title_keywords: set[str] = field(default_factory=set)
 
     @property
     def merged_summary(self) -> str:
@@ -71,6 +73,33 @@ def clean_html_text(raw: str | None, max_chars: int = 600) -> str:
     return collapsed
 
 
+def sanitize_headline(raw_title: str | None) -> str:
+    """Clean editorial suffixes, brand marks, and date watermarks from feed titles."""
+    t = clean_html_text(raw_title, max_chars=240)
+    if not t:
+        return ""
+    # Strip pipes and common editorial section tags
+    t = re.sub(
+        r"\|\s*(?:Above the Fold|Explained|Analysis|Highlights|Live Updates|Live|Opinion|Editorial|Premium|Video|Watch|Podcast).*$",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Strip trailing news outlet brand names
+    t = re.sub(
+        r"\s*[-–—]\s*(?:The Hindu|Hindustan Times|Indian Express|NDTV|Times of India|Livemint|Economic Times|ET Tech|Sportstar|Inc42).*$",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
+    # Strip dates like "Nov 11, 2026" or "11 November 2026"
+    t = re.sub(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:,\s*\d{4})?\b", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*(?:,\s*\d{4})?\b", "", t, flags=re.IGNORECASE)
+    # Clean dangling punctuation and spaces
+    t = re.sub(r"\s*[|:–—,-]\s*$", "", t).strip()
+    return t or clean_html_text(raw_title, max_chars=240)
+
+
 def _parse_entry_datetime(entry: dict) -> datetime | None:
     for key in ("published_parsed", "updated_parsed"):
         parsed = entry.get(key)
@@ -92,13 +121,14 @@ def parse_feed_xml(
     parsed = feedparser.parse(xml_bytes)
     articles: list[NewsArticle] = []
     for entry in parsed.entries[:max_items]:
-        title = clean_html_text(entry.get("title"), max_chars=240)
+        title = sanitize_headline(entry.get("title"))
         if not title:
             continue
         raw_summary = entry.get("summary") or entry.get("description") or ""
         summary = clean_html_text(raw_summary, max_chars=550)
         url = str(entry.get("link") or "").strip()
         published_at = _parse_entry_datetime(entry)
+        title_keywords = frozenset(tokenize_keywords(title))
         keywords = frozenset(tokenize_keywords(f"{title} {summary[:200]}"))
         articles.append(
             NewsArticle(
@@ -110,6 +140,7 @@ def parse_feed_xml(
                 published_at=published_at,
                 weight=feed.weight,
                 keywords=keywords,
+                title_keywords=title_keywords,
             )
         )
     return articles
@@ -154,7 +185,7 @@ def _select_balanced_clusters(
     clusters: list[StoryCluster],
     max_clusters: int,
 ) -> list[StoryCluster]:
-    """Pick up to max_clusters via round-robin across categories, then sort by score."""
+    """Pick up to max_clusters prioritizing National/Regional coverage, then sort by score."""
     if max_clusters <= 0 or len(clusters) <= max_clusters:
         return clusters[:max_clusters]
 
@@ -162,25 +193,28 @@ def _select_balanced_clusters(
     for cluster in clusters:
         buckets.setdefault(cluster.category, []).append(cluster)
 
-    # Order categories consistently, keeping any unseen categories at the end.
-    preferred_order = ["National", "International", "Sports", "Tech"]
-    ordered_categories = [c for c in preferred_order if c in buckets]
-    ordered_categories.extend(c for c in buckets if c not in ordered_categories)
+    # 2:1 priority for National news so morning listeners get strong domestic/regional coverage
+    cycle_order = ["National", "National", "International", "Sports", "Tech"]
+    for cat in buckets:
+        if cat not in cycle_order:
+            cycle_order.append(cat)
 
     selected: list[StoryCluster] = []
-    idx = 0
+    bucket_indices: dict[str, int] = {c: 0 for c in buckets}
+
     while len(selected) < max_clusters:
         added_this_round = False
-        for category in ordered_categories:
-            bucket = buckets[category]
-            if idx < len(bucket):
-                selected.append(bucket[idx])
-                added_this_round = True
-                if len(selected) >= max_clusters:
-                    break
+        for cat in cycle_order:
+            if cat in buckets:
+                idx = bucket_indices[cat]
+                if idx < len(buckets[cat]):
+                    selected.append(buckets[cat][idx])
+                    bucket_indices[cat] += 1
+                    added_this_round = True
+                    if len(selected) >= max_clusters:
+                        break
         if not added_this_round:
             break
-        idx += 1
 
     selected.sort(key=lambda c: (c.score, bool(c.merged_summary)), reverse=True)
     return selected
@@ -219,10 +253,18 @@ def cluster_articles(
     clusters: list[StoryCluster] = []
     for art in unique_articles:
         art_tokens = set(art.keywords) or tokenize_keywords(art.title)
+        art_title_tokens = set(art.title_keywords) or tokenize_keywords(art.title)
         best_cluster: StoryCluster | None = None
         best_sim = 0.0
         for cluster in clusters:
-            sim = jaccard_similarity(art_tokens, cluster.keywords)
+            title_sim = (
+                jaccard_similarity(art_title_tokens, cluster.title_keywords)
+                if art_title_tokens and cluster.title_keywords
+                else 0.0
+            )
+            content_sim = jaccard_similarity(art_tokens, cluster.keywords)
+            # Blended metric: shared title keywords indicate same event, content confirms details
+            sim = (0.5 * title_sim + 0.5 * content_sim) if title_sim > 0.0 else content_sim
             if sim >= cfg.cluster_similarity_threshold and sim > best_sim:
                 best_sim = sim
                 best_cluster = cluster
@@ -237,6 +279,7 @@ def cluster_articles(
             if art.summary:
                 best_cluster.summaries.append(art.summary)
             best_cluster.keywords |= art_tokens
+            best_cluster.title_keywords |= art_title_tokens
             if art.published_at and (
                 best_cluster.latest_published is None
                 or art.published_at > best_cluster.latest_published
@@ -253,6 +296,7 @@ def cluster_articles(
                     urls=[art.url] if art.url else [],
                     summaries=[art.summary] if art.summary else [],
                     keywords=set(art_tokens),
+                    title_keywords=set(art_title_tokens),
                     score=(1.0 * art.weight) + bonus,
                     latest_published=art.published_at,
                 )

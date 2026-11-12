@@ -1,11 +1,11 @@
 podcast:
   show_title: "Daily Morning Brief"
-  show_description: "Concise daily briefing from reliable Indian media covering national news, international affairs, sports, and technology."
+  show_description: "Comprehensive daily briefing from reliable Indian media covering national & regional news, international affairs, sports, and technology."
   author: "Suraj & AI Hosts"
   language: "en"
   episode_title_template: "Daily Brief — {date}"
-  audio_format: "brief"       # deep-dive | brief | critique | debate
-  audio_length: "short"       # short | default | long
+  audio_format: "deep-dive"   # deep-dive | brief | critique | debate
+  audio_length: "short"     # short | default | long
   mp3_bitrate: "192k"
   sample_rate: 44100
   target_lufs: -16.0
@@ -24,22 +24,26 @@ schedule:
 
 harvester:
   lookback_hours: 36
-  min_articles_fallback: 12
-  max_items_per_feed: 12
-  max_clusters: 12
-  top_headlines_count: 4
-  developing_stories_count: 4
-  cluster_similarity_threshold: 0.28
+  min_articles_fallback: 16
+  max_items_per_feed: 25
+  max_clusters: 24
+  top_headlines_count: 5
+  developing_stories_count: 8
+  cluster_similarity_threshold: 0.22
   arc_match_threshold: 0.22
   stale_arc_days: 7
   request_timeout_seconds: 15.0
 
 feeds:
-  # --- National (India) ---
+  # --- National & Regional (India) ---
   - name: "The Hindu - National"
     category: "National"
     url: "https://www.thehindu.com/news/national/feeder/default.rss"
     weight: 1.2
+  - name: "The Hindu - States"
+    category: "National"
+    url: "https://www.thehindu.com/news/states/feeder/default.rss"
+    weight: 1.15
   - name: "Hindustan Times - India"
     category: "National"
     url: "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml"
@@ -47,7 +51,15 @@ feeds:
   - name: "Indian Express - India"
     category: "National"
     url: "https://indianexpress.com/section/india/feed/"
+    weight: 1.15
+  - name: "Indian Express - Politics"
+    category: "National"
+    url: "https://indianexpress.com/section/political-pulse/feed/"
     weight: 1.1
+  - name: "NDTV - India"
+    category: "National"
+    url: "https://feeds.feedburner.com/ndtvnews-india-news"
+    weight: 1.15
 
   # --- International ---
   - name: "The Hindu - International"
