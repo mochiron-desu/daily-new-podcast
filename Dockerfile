@@ -23,5 +23,5 @@ RUN mkdir -p /app/storage/dossiers /app/storage/prompts /app/storage/episodes
 
 EXPOSE 8787
 
-CMD ["python", "-m", "src.cli", "serve"]
+CMD ["python", "-m", "src.cli", "run-once"]
 
