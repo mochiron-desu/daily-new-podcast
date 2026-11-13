@@ -95,6 +95,8 @@ class NotebookLMConfig:
     storage_path: Path | None = None
     auth_json: str = ""
     auth_b64: str = ""
+    master_token_json: str = ""
+    master_token_b64: str = ""
 
 
 @dataclass(frozen=True)
@@ -375,6 +377,8 @@ def load_config(
         storage_path=_resolve_optional_path(_env_str("NOTEBOOKLM_STORAGE_PATH", ""), resolved_base),
         auth_json=_env_str("NOTEBOOKLM_AUTH_JSON", ""),
         auth_b64=_env_str("NOTEBOOKLM_AUTH_B64", ""),
+        master_token_json=_env_str("NOTEBOOKLM_MASTER_TOKEN_JSON", ""),
+        master_token_b64=_env_str("NOTEBOOKLM_MASTER_TOKEN_B64", ""),
     )
 
     podbean = PodbeanConfig(

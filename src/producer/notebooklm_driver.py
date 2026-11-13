@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import json
 import logging
 import os
+import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -75,6 +77,30 @@ def _validate_storage_json(raw_json: str, source_label: str) -> None:
         )
 
 
+def _decode_master_token_payload(cfg: NotebookLMConfig) -> str | None:
+    if cfg.master_token_b64:
+        try:
+            decoded = base64.b64decode(cfg.master_token_b64).decode("utf-8").strip()
+        except Exception as exc:
+            raise NotebookLMAuthError(f"Invalid base64 in NOTEBOOKLM_MASTER_TOKEN_B64: {exc}") from exc
+        if decoded:
+            return decoded
+    if cfg.master_token_json:
+        return cfg.master_token_json
+    return None
+
+
+def _validate_master_token_json(raw_json: str, source_label: str) -> None:
+    try:
+        parsed = json.loads(raw_json)
+    except json.JSONDecodeError as exc:
+        raise NotebookLMAuthError(f"Malformed JSON in {source_label}: {exc}") from exc
+    if not isinstance(parsed, dict) or "master_token" not in parsed:
+        raise NotebookLMAuthError(
+            f"{source_label} must contain a Google Master Token JSON object with 'master_token'."
+        )
+
+
 def resolve_notebooklm_storage(
     cfg: NotebookLMConfig,
     storage_root: Path,
@@ -84,20 +110,40 @@ def resolve_notebooklm_storage(
 
     Precedence:
     1. Empty NOTEBOOKLM_AUTH_JSON env vars are sanitized so notebooklm-py doesn't choke.
-    2. If NOTEBOOKLM_AUTH_B64 / NOTEBOOKLM_AUTH_JSON is set and a writable path is
+    2. If NOTEBOOKLM_MASTER_TOKEN_B64 / NOTEBOOKLM_MASTER_TOKEN_JSON is set, write/update
+       master_token.json sibling to the storage path.
+    3. If NOTEBOOKLM_AUTH_B64 / NOTEBOOKLM_AUTH_JSON is set and a writable path is
        configured (or prefer_writable_seed=True, e.g. Railway Volume), seed/update the
        file whenever the env secret hash changes so cookie rotation still works on disk.
-    3. If NOTEBOOKLM_STORAGE_PATH exists, use it directly.
-    4. If NOTEBOOKLM_AUTH_JSON is set (inline), return None so notebooklm-py reads it.
-    5. Otherwise fall back to local profile (~/.notebooklm/profiles/<profile>/storage_state.json).
+    4. If NOTEBOOKLM_STORAGE_PATH exists (or has a sibling master_token.json), use it directly.
+    5. If NOTEBOOKLM_AUTH_JSON is set (inline), return None so notebooklm-py reads it.
+    6. Otherwise fall back to local profile (~/.notebooklm/profiles/<profile>/storage_state.json).
     """
     if os.environ.get("NOTEBOOKLM_AUTH_JSON", None) == "":
         os.environ.pop("NOTEBOOKLM_AUTH_JSON", None)
 
     env_payload = _decode_auth_payload(cfg)
+    master_payload = _decode_master_token_payload(cfg)
     target_path = cfg.storage_path
-    if target_path is None and env_payload and prefer_writable_seed:
+    if target_path is None and (env_payload or master_payload) and prefer_writable_seed:
         target_path = storage_root / "notebooklm_storage_state.json"
+
+    # Seed master_token.json sibling if master token payload provided
+    if master_payload:
+        _validate_master_token_json(master_payload, "NOTEBOOKLM_MASTER_TOKEN_B64/NOTEBOOKLM_MASTER_TOKEN_JSON")
+        effective_target = target_path or (storage_root / "notebooklm_storage_state.json")
+        ensure_dir(effective_target.parent)
+        master_path = effective_target.with_name("master_token.json")
+        payload_hash = hashlib.sha256(master_payload.encode("utf-8")).hexdigest()
+        hash_file = master_path.with_suffix(".sha256")
+        current_hash = hash_file.read_text(encoding="utf-8").strip() if hash_file.exists() else ""
+        if not master_path.exists() or current_hash != payload_hash:
+            atomic_write_text(master_path, master_payload)
+            hash_file.write_text(payload_hash, encoding="utf-8")
+            if sys.platform != "win32":
+                with contextlib.suppress(OSError):
+                    os.chmod(master_path, 0o600)
+        target_path = effective_target
 
     if env_payload:
         _validate_storage_json(env_payload, "NOTEBOOKLM_AUTH_B64/NOTEBOOKLM_AUTH_JSON")
@@ -115,21 +161,22 @@ def resolve_notebooklm_storage(
         return None
 
     if target_path is not None:
-        if not target_path.exists():
+        master_sibling = target_path.with_name("master_token.json")
+        if not target_path.exists() and not master_sibling.exists():
             raise NotebookLMAuthError(f"NOTEBOOKLM_STORAGE_PATH does not exist: {target_path}")
         return target_path
 
     default_profile_path = (
         Path.home() / ".notebooklm" / "profiles" / cfg.profile / "storage_state.json"
     )
-    if default_profile_path.exists():
+    if default_profile_path.exists() or default_profile_path.with_name("master_token.json").exists():
         return default_profile_path
     legacy_path = Path.home() / ".notebooklm" / "storage_state.json"
-    if legacy_path.exists():
+    if legacy_path.exists() or legacy_path.with_name("master_token.json").exists():
         return legacy_path
     raise NotebookLMAuthError(
         "No NotebookLM credentials found. Run 'notebooklm login' locally or set "
-        "NOTEBOOKLM_AUTH_JSON / NOTEBOOKLM_AUTH_B64."
+        "NOTEBOOKLM_MASTER_TOKEN_B64 / NOTEBOOKLM_AUTH_B64 / NOTEBOOKLM_AUTH_JSON."
     )
 
 

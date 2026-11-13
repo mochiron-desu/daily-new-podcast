@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             "primary_status": outcome.primary_status.__dict__ if outcome.primary_status else None,
             "pipeline_result": outcome.pipeline_result.__dict__ if outcome.pipeline_result else None,
         }
-        print(json.dumps(out_dict, indent=2))
+        print(json.dumps(out_dict, indent=2, default=str))
         if outcome.pipeline_result and outcome.pipeline_result.status == "failed":
             return 1
         return 0
