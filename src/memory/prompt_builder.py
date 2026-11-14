@@ -56,8 +56,8 @@ def build_continuity_prompt(
     matched_arcs: Sequence[MatchedArcContext],
     clusters: Sequence[StoryCluster],
     prompts_dir: Path,
-    audio_format: str = "brief",
-    audio_length: str = "short",
+    audio_format: str = "deep-dive",
+    audio_length: str = "default",
 ) -> tuple[str, Path]:
     """Generate and persist the NotebookLM Audio Overview instructions with continuity."""
     date_label = episode_date.strftime("%B %d, %Y")
@@ -70,12 +70,13 @@ def build_continuity_prompt(
         )
     else:
         opener = (
-            f"You are hosting '{show_title}', a crisp, analytical morning news podcast for {date_label}."
+            f"You are the dynamic, charismatic co-hosts of '{show_title}'—a lively, high-information, "
+            f"personality-packed morning news podcast for {date_label}."
         )
 
     lines: list[str] = [
         opener,
-        "Open by briefly welcoming listeners to today's morning edition.",
+        "Open by briefly welcoming listeners to today's morning edition with high energy and authentic broadcast presence.",
         "",
     ]
 
@@ -93,7 +94,7 @@ def build_continuity_prompt(
         lines.append("")
 
     if is_brief:
-        top_headlines = [c.headline for c in clusters[:4]]
+        top_headlines = [c.headline for c in clusters[:6]]
         if top_headlines:
             lines.append("TODAY'S TOP HEADLINES TO ANCHOR THE BRIEFING:")
             for idx, headline in enumerate(top_headlines, start=1):
@@ -104,52 +105,71 @@ def build_continuity_prompt(
             [
                 "DELIVERY INSTRUCTIONS:",
                 "1. Keep it short, crisp, and strictly to the point—NO deep dives, NO long banter, and NO filler.",
-                "2. Cover all four beats cleanly in order: Indian National news, International affairs, Sports, and Tech.",
+                "2. Cover all beats cleanly in order: Indian National news, International affairs, Sports, and Tech (including Regional updates).",
                 "3. Give 1-2 punchy sentences per story: what happened and why it matters.",
                 '4. For developing stories listed above, bridge in one quick phrase ("Picking up where we left off on [topic]...") before stating today\'s update.',
                 "5. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak like a sharp morning news anchor.",
             ]
         )
     else:
-        # Full deep-dive podcast instructions with rich coverage across all beats
+        # Full deep-dive news show format with character, banter, and rich information density
         nat_clusters = [c for c in clusters if c.category == "National"]
+        reg_clusters = [c for c in clusters if c.category == "Regional"]
         intl_clusters = [c for c in clusters if c.category == "International"]
         sports_clusters = [c for c in clusters if c.category == "Sports"]
         tech_clusters = [c for c in clusters if c.category == "Tech"]
+        other_clusters = [
+            c
+            for c in clusters
+            if c.category not in {"National", "Regional", "International", "Sports", "Tech"}
+        ]
 
-        lines.append("CURATED STORIES TO COVER IN TODAY'S EPISODE:")
+        lines.append("CURATED STORIES TO COVER IN TODAY'S SHOW:")
         if nat_clusters:
-            lines.append("\n[Beat 1: Indian National & Regional Affairs — Security, Politics, Incidents]")
+            lines.append("\n[Beat 1: Indian National Headlines — Governance, Politics, Security & Courts]")
             for c in nat_clusters[:8]:
-                detail = f" ({c.merged_summary[:120]}...)" if c.merged_summary else ""
+                detail = f" — Details: {c.merged_summary[:140]}..." if c.merged_summary else ""
+                lines.append(f"• {c.headline}{detail}")
+
+        if reg_clusters:
+            lines.append("\n[Beat 2: Regional & State Desks — Key Developments Across Indian States & Cities]")
+            for c in reg_clusters[:8]:
+                detail = f" — Details: {c.merged_summary[:140]}..." if c.merged_summary else ""
                 lines.append(f"• {c.headline}{detail}")
 
         if intl_clusters:
-            lines.append("\n[Beat 2: International Affairs & Geopolitics]")
+            lines.append("\n[Beat 3: International Affairs & Geopolitics]")
             for c in intl_clusters[:5]:
-                detail = f" ({c.merged_summary[:100]}...)" if c.merged_summary else ""
+                detail = f" — Details: {c.merged_summary[:120]}..." if c.merged_summary else ""
                 lines.append(f"• {c.headline}{detail}")
 
         if sports_clusters:
-            lines.append("\n[Beat 3: Sports]")
+            lines.append("\n[Beat 4: Sports]")
             for c in sports_clusters[:4]:
-                lines.append(f"• {c.headline}")
+                detail = f" — Details: {c.merged_summary[:100]}..." if c.merged_summary else ""
+                lines.append(f"• {c.headline}{detail}")
 
         if tech_clusters:
-            lines.append("\n[Beat 4: Technology & Business]")
+            lines.append("\n[Beat 5: Technology, Business & Startups]")
             for c in tech_clusters[:4]:
+                detail = f" — Details: {c.merged_summary[:100]}..." if c.merged_summary else ""
+                lines.append(f"• {c.headline}{detail}")
+
+        if other_clusters:
+            lines.append("\n[Beat 6: Additional General Highlights]")
+            for c in other_clusters[:3]:
                 lines.append(f"• {c.headline}")
         lines.append("")
 
         lines.extend(
             [
-                "HOST & PRESENTATION INSTRUCTIONS:",
-                "1. Deliver a comprehensive, engaging two-host morning briefing podcast (~8-12 minutes). Do NOT stop after only 2-3 stories.",
-                "2. Lead strongly with Indian National & Regional news: give breaking security/terror reports, state politics, accidents, and economic/civic developments substantive and thoughtful coverage.",
-                "3. Transition smoothly into International developments, and round out the show with highlights in Sports and Technology.",
-                '4. For developing stories listed in the continuity section above, bridge naturally: "Picking up where we left off on [topic]..." before discussing the latest.',
-                "5. Have a genuine, dynamic two-host rapport: discuss why stories matter, offer clear context, and avoid robotically reading bullet lists.",
-                "6. Do not mention PDFs, dossiers, RSS feeds, or source formatting—speak as seasoned, authentic broadcast journalists.",
+                "HOST PRESENTATION, CHARACTER & BANTER INSTRUCTIONS:",
+                "1. News Show Host Dynamics & Character: You are two charismatic, quick-witted co-hosts on a flagship morning news show. Have genuine chemistry, quick back-and-forth banter, witty observations, and authentic reactions ('Wait, seriously?', 'Hold on, let me get this straight', 'Let's break down why this is huge'). One host brings sharp analytical breakdowns while the other brings grounded, relatable perspectives and witty analogies. Keep banter snappy, intelligent, and natural—never stiff or robotic.",
+                "2. Maximum Information Density: Cram as much factual information, key names, data points, state/city context, and background into the show as humanly possible! Do NOT rush past stories with vague 1-sentence summaries, and do NOT get bogged down on only one topic. Cover ALL the curated stories listed above across all beats thoroughly.",
+                "3. Strong Indian Regional Coverage: Give dedicated, substantive airtime to Regional and State news alongside National headlines. Explicitly name the states, cities, and local regions involved (e.g., Delhi, Bengaluru, Mumbai, Chennai, Hyderabad, UP, Kerala, Bengal), highlighting civic issues, state politics, local infrastructure, and everyday citizen impact.",
+                "4. Full-Length Show Pacing (~10-15 minutes): Keep up momentum with brisk transitions between beats: National Headlines -> Regional & State Desk -> International Affairs -> Sports -> Tech & Business. Use conversational segues with personality.",
+                '5. Continuity from Past Episodes: For developing story arcs listed above, naturally bridge the storyline: "Picking up where we left off on [topic]..." before explaining today\'s update.',
+                "6. Authentic Broadcast Realism: Never mention 'PDFs', 'dossiers', 'prompts', 'RSS feeds', or 'bullet points'. Speak purely as seasoned broadcast journalists live in the studio.",
             ]
         )
 

@@ -63,6 +63,63 @@ def test_story_arc_continuity_and_prompt(tmp_path: Path) -> None:
     assert "Indian National news, International affairs, Sports, and Tech" in prompt_text
 
 
+def test_deep_dive_news_show_prompt_with_regional_and_banter(tmp_path: Path) -> None:
+    nat_cluster = StoryCluster(
+        cluster_id="parliament-session",
+        headline="Parliament winter session begins with key economic agenda",
+        category="National",
+        sources=["The Hindu - National"],
+        urls=["https://example.com/nat"],
+        summaries=["Government presents three key finance bills."],
+        keywords={"parliament", "session", "winter", "economic"},
+        score=2.0,
+        latest_published=datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc),
+    )
+    reg_cluster = StoryCluster(
+        cluster_id="bengaluru-metro-extension",
+        headline="Bengaluru Metro Phase 2 pink line passes final safety inspection",
+        category="Regional",
+        sources=["The Hindu - Cities"],
+        urls=["https://example.com/reg"],
+        summaries=["Commercial passenger runs to begin next Monday after clearance."],
+        keywords={"bengaluru", "metro", "pink", "line", "safety"},
+        score=1.9,
+        latest_published=datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc),
+    )
+    intl_cluster = StoryCluster(
+        cluster_id="g20-summit-climate",
+        headline="Global climate summit reaches breakthrough on loss and damage fund",
+        category="International",
+        sources=["The Hindu - International"],
+        urls=["https://example.com/intl"],
+        summaries=["Delegates approve 100B operational framework."],
+        keywords={"climate", "summit", "breakthrough"},
+        score=1.8,
+        latest_published=datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc),
+    )
+
+    prompt_text, prompt_path = build_continuity_prompt(
+        episode_date=date(2026, 11, 10),
+        show_title="Daily Morning Brief",
+        matched_arcs=[],
+        clusters=[nat_cluster, reg_cluster, intl_cluster],
+        prompts_dir=tmp_path / "prompts",
+        audio_format="deep-dive",
+        audio_length="default",
+    )
+    assert prompt_path.is_file()
+    assert "Beat 1: Indian National Headlines" in prompt_text
+    assert "Beat 2: Regional & State Desks" in prompt_text
+    assert "Beat 3: International Affairs" in prompt_text
+    assert "Parliament winter session" in prompt_text
+    assert "Bengaluru Metro Phase 2" in prompt_text
+    assert "HOST PRESENTATION, CHARACTER & BANTER INSTRUCTIONS" in prompt_text
+    assert "Maximum Information Density" in prompt_text
+    assert "Strong Indian Regional Coverage" in prompt_text
+    assert "genuine chemistry, quick back-and-forth banter" in prompt_text
+
+
+
 def test_state_merge_prefers_published_and_newer_arcs(tmp_path: Path) -> None:
     railway_db = StateDB(tmp_path / "railway.sqlite")
     local_db = StateDB(tmp_path / "local.sqlite")

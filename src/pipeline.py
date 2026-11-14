@@ -68,7 +68,22 @@ def _build_episode_description(
     lines: list[str] = [
         f"{show_title} ({episode_date.strftime('%b %d, %Y')}):",
     ]
-    for cluster in clusters[:4]:
+    seen_cats: set[str] = set()
+    picked: list = []
+    # Pick top story from distinct categories first to ensure balanced show notes
+    for cluster in clusters:
+        if cluster.category not in seen_cats:
+            picked.append(cluster)
+            seen_cats.add(cluster.category)
+        if len(picked) >= 5:
+            break
+    if len(picked) < 4:
+        for cluster in clusters:
+            if cluster not in picked:
+                picked.append(cluster)
+            if len(picked) >= 4:
+                break
+    for cluster in picked:
         lines.append(f"• [{cluster.category}] {cluster.headline}")
     if matched_arcs and len("\n".join(lines)) < 380:
         lines.append(f"Updates: {', '.join(a.title[:45] for a in matched_arcs[:2])}")

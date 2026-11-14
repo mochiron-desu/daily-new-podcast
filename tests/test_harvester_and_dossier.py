@@ -127,3 +127,47 @@ def test_cluster_articles_balances_all_four_categories() -> None:
     cats = {c.category for c in clusters}
     assert cats == {"National", "International", "Sports", "Tech"}
 
+
+def test_cluster_articles_and_dossier_with_regional() -> None:
+    now = datetime(2026, 11, 10, 5, 0, tzinfo=timezone.utc)
+    articles: list[NewsArticle] = []
+    categories = ("National", "Regional", "International", "Sports", "Tech")
+    for cat in categories:
+        for idx in range(3):
+            articles.append(
+                NewsArticle(
+                    title=f"{cat} breaking story {idx}",
+                    summary=f"{cat} detailed report {idx}.",
+                    url=f"https://example.com/{cat.lower()}/{idx}",
+                    source_name=f"{cat} Source",
+                    category=cat,
+                    published_at=now,
+                    weight=1.2 if cat in ("National", "Regional") else 1.0,
+                    keywords={cat.lower(), f"story{idx}"},
+                )
+            )
+
+    cfg = HarvesterConfig(
+        max_clusters=10,
+        top_headlines_count=2,
+        developing_stories_count=6,
+        cluster_similarity_threshold=0.8,
+    )
+    clusters = cluster_articles(articles, cfg, reference_now=now)
+    assert len(clusters) == 10
+    cats = {c.category for c in clusters}
+    assert "Regional" in cats
+    assert "National" in cats
+
+    from src.harvester.dossier_builder import render_dossier_markdown
+    md = render_dossier_markdown(
+        episode_date=date(2026, 11, 10),
+        show_title="Daily Morning Brief",
+        clusters=clusters,
+        matched_arcs=[],
+        cfg=cfg,
+    )
+    assert "## Beat Briefs: National, Regional, International, Sports & Tech" in md
+    assert "### Regional" in md
+
+

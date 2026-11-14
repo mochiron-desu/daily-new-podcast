@@ -193,8 +193,8 @@ def _select_balanced_clusters(
     for cluster in clusters:
         buckets.setdefault(cluster.category, []).append(cluster)
 
-    # 2:1 priority for National news so morning listeners get strong domestic/regional coverage
-    cycle_order = ["National", "National", "International", "Sports", "Tech"]
+    # High priority for National and Regional news so morning listeners get strong domestic coverage
+    cycle_order = ["National", "Regional", "National", "Regional", "International", "Sports", "Tech"]
     for cat in buckets:
         if cat not in cycle_order:
             cycle_order.append(cat)
