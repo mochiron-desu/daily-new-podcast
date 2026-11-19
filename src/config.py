@@ -119,6 +119,8 @@ class TelegramConfig:
     chat_id: str = ""
     source: str = "unconfigured"
     send_artifacts: bool = True
+    send_pdf: bool = False
+    notify_stages: bool = False
 
     @property
     def enabled(self) -> bool:
@@ -194,12 +196,16 @@ def _resolve_telegram_config() -> TelegramConfig:
     token = _env_str("TELEGRAM_BOT_TOKEN", "")
     chat_id = _env_str("TELEGRAM_CHAT_ID", "")
     send_artifacts = _env_bool("TELEGRAM_SEND_ARTIFACTS", True)
+    send_pdf = _env_bool("TELEGRAM_SEND_PDF", False)
+    notify_stages = _env_bool("TELEGRAM_NOTIFY_STAGES", False)
     if token and chat_id:
         return TelegramConfig(
             bot_token=token,
             chat_id=chat_id,
             source="env",
             send_artifacts=send_artifacts,
+            send_pdf=send_pdf,
+            notify_stages=notify_stages,
         )
 
     candidates = (
@@ -226,6 +232,8 @@ def _resolve_telegram_config() -> TelegramConfig:
                 chat_id=chat_id,
                 source=f"file:{cfg_path}",
                 send_artifacts=send_artifacts,
+                send_pdf=send_pdf,
+                notify_stages=notify_stages,
             )
 
     return TelegramConfig(
@@ -233,6 +241,8 @@ def _resolve_telegram_config() -> TelegramConfig:
         chat_id=chat_id,
         source=resolved_source,
         send_artifacts=send_artifacts,
+        send_pdf=send_pdf,
+        notify_stages=notify_stages,
     )
 
 

@@ -133,6 +133,7 @@ async def run_daily_pipeline(
             status=status,
             episode_date=ep_date,
             node_id=node_id,
+            show_title=cfg.podcast.show_title,
         )
 
     if not force:
@@ -436,15 +437,10 @@ async def run_daily_pipeline(
                     performer=cfg.podcast.show_title,
                     caption=f"🎙️ *{published.title}*",
                 )
-            if dossier.pdf_path.is_file():
+            if cfg.telegram.send_pdf and dossier.pdf_path.is_file():
                 await tg.send_document(
                     dossier.pdf_path,
-                    caption=f"📄 News Brief Dossier ({date_str})",
-                )
-            if prompt_path.is_file():
-                await tg.send_document(
-                    prompt_path,
-                    caption=f"📝 NotebookLM Continuity Prompt ({date_str})",
+                    caption=f"📄 {cfg.podcast.show_title} Dossier ({date_str})",
                 )
 
         # 9. Clean up generated media/build artifacts to save volume storage

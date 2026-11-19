@@ -374,6 +374,7 @@ async def run_failover_check(
             status="warning",
             episode_date=ep_date,
             node_id=cfg.failover.node_id,
+            show_title=cfg.podcast.show_title,
         )
     result = await run_daily_pipeline(
         cfg,

@@ -63,13 +63,19 @@ class TelegramNotifier:
         status: str = "info",
         episode_date: date | str | None = None,
         node_id: str = "",
+        show_title: str = "",
     ) -> bool:
         """Send a stage log notification without ever raising to pipeline callers."""
         if not self.enabled:
             return False
 
+        if not self.cfg.notify_stages and status in ("info", "running"):
+            logger.debug("Suppressing intermediate Telegram stage notification: %s (%s)", stage, status)
+            return False
+
         icon = _STATUS_EMOJI.get(status, "🔔")
-        header = f"{icon} *Daily Brief — {_escape_markdown(stage)}*"
+        title_prefix = f"{show_title}: " if show_title else ""
+        header = f"{icon} *{_escape_markdown(title_prefix)}{_escape_markdown(stage)}*"
         meta_parts: list[str] = []
         if episode_date is not None:
             ep_str = episode_date.isoformat() if isinstance(episode_date, date) else str(episode_date)

@@ -68,7 +68,7 @@ async def test_telegram_notifier_sends_and_swallows_errors(monkeypatch: pytest.M
         lambda *args, **kwargs: orig_client(transport=transport, *args, **kwargs),
     )
 
-    tg_cfg = TelegramConfig(bot_token="123:XYZ", chat_id="555", source="env")
+    tg_cfg = TelegramConfig(bot_token="123:XYZ", chat_id="555", source="env", notify_stages=True)
     notifier = TelegramNotifier(tg_cfg)
     ok = await notifier.send_stage(
         "News Harvested",
@@ -76,11 +76,20 @@ async def test_telegram_notifier_sends_and_swallows_errors(monkeypatch: pytest.M
         status="info",
         episode_date=date(2026, 11, 10),
         node_id="railway-primary",
+        show_title="Daily Brief",
     )
     assert ok is True
     assert len(sent_payloads) == 1
     assert sent_payloads[0]["chat_id"] == "555"
-    assert "News Harvested" in sent_payloads[0]["text"]
+    assert "Daily Brief: News Harvested" in sent_payloads[0]["text"]
+
+    # When notify_stages is False, info/running stages are suppressed while success/failure are sent
+    quiet_cfg = TelegramConfig(bot_token="123:XYZ", chat_id="555", source="env", notify_stages=False)
+    quiet_notifier = TelegramNotifier(quiet_cfg)
+    assert await quiet_notifier.send_stage("Pipeline Started", status="running") is False
+    assert await quiet_notifier.send_stage("Dossier Ready", status="info") is False
+    assert await quiet_notifier.send_stage("Episode Published", status="success") is True
+    assert await quiet_notifier.send_stage("Pipeline Failed", status="failure") is True
 
     live_ok, live_msg = await check_telegram_credentials(tg_cfg, verify_live=True)
     assert live_ok is True
