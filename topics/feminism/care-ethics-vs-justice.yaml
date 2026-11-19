@@ -1,0 +1,41 @@
+id: "care-ethics-vs-justice-ethics"
+title: "Ethics of Care vs Abstract Justice: Relational Morality"
+category: "feminism"
+question: "Is universal, impartial justice blind to human relational vulnerability?"
+tags: ["feminism", "moral-philosophy", "care-ethics", "deontology"]
+source_urls:
+  - "https://plato.stanford.edu/entries/feminism-ethics/"
+  - "https://iep.utm.edu/care-eth/"
+
+side_a:
+  name: "The Relational Care Tradition"
+  thinkers: "Carol Gilligan, Virginia Held, Nel Noddings"
+  thesis: "Morality is rooted in relational responsiveness, empathy, and meeting real needs within concrete human relationships, not detached universal rules."
+  arguments:
+    - "Traditional moral frameworks prioritize an artificial, autonomous male subject detached from family, caretaking, and dependence."
+    - "Abstract universal rules often disguise the perspective of the privileged while neglecting actual emotional connection and vulnerability."
+    - "Human beings start and end life completely dependent on care; morality must be built from interdependence rather than isolated rights."
+  key_quote: "The moral agent is not an autonomous solitary calculator, but a person embedded in concrete relationships with actual others."
+
+side_b:
+  name: "The Universal Justice Tradition"
+  thinkers: "Immanuel Kant, Lawrence Kohlberg, Ronald Dworkin"
+  thesis: "Moral legitimacy requires impartial universal principles applied equally without special pleading for close personal relationships."
+  arguments:
+    - "Without universal, impartial rules of justice, ethics devolves into nepotism, tribal favoritism, and arbitrary emotional preference."
+    - "Human dignity rests on universal rights that protect individuals from domination, regardless of whether someone feels affection or care for them."
+    - "Justice creates the baseline framework of equal freedom within which caring relationships can safely flourish."
+  key_quote: "Act only according to that maxim whereby you can at the same time will that it should become a universal law."
+
+thought_experiment: |
+  Heinz's Dilemma Re-examined: Heinz's wife is dying from cancer. A local druggist invented a lifesaving drug but charges ten times 
+  what it cost to make. Heinz cannot afford it. Should Heinz steal the drug? 
+  The Justice framework calculates whether property rights supersede the right to life. 
+  The Care framework challenges the entire premise: why is the community failing to bridge dialogue between Heinz and the druggist? 
+  If ethics is only about rules, Heinz either steals or lets her die; care ethics insists on transforming the relational network itself.
+
+reading_excerpt: |
+  Care ethics emerged as a critique of Enlightenment moral theory, which elevated impartiality, abstraction, and contractual 
+  exchange above dependency work and relational responsiveness. While justice ethics asks 'What is fair for autonomous individuals?', 
+  care ethics asks 'How can concrete relationships be preserved and human needs nurtured?'. The tension between universal rights 
+  and particular relational duties remains a defining battleground of contemporary feminist philosophy.

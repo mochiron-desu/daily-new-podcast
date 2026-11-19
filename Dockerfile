@@ -16,6 +16,8 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY config.yaml ./
+COPY configs ./configs
+COPY topics ./topics
 COPY assets ./assets
 COPY src ./src
 

@@ -1,0 +1,41 @@
+id: "rawls-vs-nozick-redistribution"
+title: "The Ethics of Wealth Redistribution: Fairness vs Entitlement"
+category: "philosophy"
+question: "Is state wealth redistribution inherently moral fairness or unjust coercion?"
+tags: ["ethics", "political-theory", "distributive-justice"]
+source_urls:
+  - "https://plato.stanford.edu/entries/justice-distributive/"
+  - "https://iep.utm.edu/rawls/"
+
+side_a:
+  name: "The Egalitarian Justice Camp"
+  thinkers: "John Rawls, Martha Nussbaum"
+  thesis: "Justice is fairness. Inequalities are permissible only if they work to the maximum benefit of the least-advantaged members of society."
+  arguments:
+    - "Natural talents, social background, and inherited wealth are morally arbitrary accidents of birth."
+    - "Under a hypothetical 'Veil of Ignorance'—not knowing one's race, wealth, or abilities—any rational person would choose a safety net and redistributive floor."
+    - "Self-ownership is bounded by social cooperation; no individual creates wealth in a vacuum without public institutions."
+  key_quote: "The natural distribution is neither just nor unjust; these are simply natural facts. What is just or unjust is the way institutions deal with these facts."
+
+side_b:
+  name: "The Libertarian Entitlement Camp"
+  thinkers: "Robert Nozick, Friedrich Hayek"
+  thesis: "Justice is historical entitlement. If property is justly acquired and justly transferred, patterned redistribution violates individual self-ownership."
+  arguments:
+    - "Redistributive taxation treats individual labor as communal property, equivalent to forced partial labor."
+    - "Liberty continuously disrupts patterned equality; to maintain an artificial distribution, the state must constantly interfere in voluntary human choices."
+    - "Individuals own themselves and the products of their labor. The state has no moral claim to seize resources for utilitarian redistribution."
+  key_quote: "Taxation of earnings from labor is on a par with forced labor."
+
+thought_experiment: |
+  The Wilt Chamberlain Argument: Suppose society begins with an absolute, perfectly equal distribution D1. 
+  One million basketball fans willingly choose to drop 25 cents each into a special box to watch Wilt Chamberlain play. 
+  Chamberlain ends up with $250,000, creating an unequal distribution D2. Each fan chose voluntarily; no one was coerced. 
+  Does the state possess a legitimate moral right to confiscate part of Chamberlain's money to restore D1?
+
+reading_excerpt: |
+  Distributive justice disputes fundamentally hinge on whether we view society as a cooperative enterprise for mutual 
+  advantage whose initial endowments belong to the common pool, or as a voluntary association of sovereign individuals 
+  holding inviolable rights. For Rawls, luck egalitarianism dictates that moral arbitrariness should not determine human 
+  wellbeing. For Nozick, any end-state distribution requires ongoing tyrannical enforcement because voluntary human exchange 
+  will persistently upset egalitarian distributions.

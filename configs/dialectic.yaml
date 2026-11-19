@@ -1,0 +1,29 @@
+podcast:
+  show_id: "against_the_grain"
+  show_type: "debate"
+  show_title: "Against the Grain"
+  show_tagline: "Ideas worth disagreeing about."
+  show_description: "Ideas worth disagreeing about. Two uncompromising perspectives. One difficult question. No manufactured consensus."
+  author: "Suraj & AI Sparring Hosts"
+  language: "en"
+  episode_title_template: "Against the Grain — {date}"
+  audio_format: "debate"     # debate | critique | brief | deep-dive
+  audio_length: "short"      # short (3-5 mins) | default | long
+  mp3_bitrate: "192k"
+  sample_rate: 44100
+  target_lufs: -16.0
+  intro_audio_path: "assets/against_the_grain_intro.mp3"
+  outro_audio_path: "assets/against_the_grain_outro.mp3"
+  cover_art_path: "assets/cover.jpg"
+  podbean_client_id_env: "PODBEAN_CLIENT_ID_AGAINST_THE_GRAIN"
+  podbean_client_secret_env: "PODBEAN_CLIENT_SECRET_AGAINST_THE_GRAIN"
+  notebook_generation_timeout_seconds: 1800
+  source_ready_timeout_seconds: 180
+  delete_notebook_on_error: true
+
+schedule:
+  timezone: "Asia/Kolkata"
+  primary_run_time: "13:00"  # 1:00 PM IST daily
+  failover_cutoff_minutes: 20
+  lock_ttl_seconds: 2400
+  http_timeout_seconds: 10.0

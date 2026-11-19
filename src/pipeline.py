@@ -10,7 +10,16 @@ from pathlib import Path
 
 from .config import AppConfig
 from .harvester import build_dossier, harvest_feeds
+from .harvester.debate_dossier import build_debate_dossier
+from .harvester.topic_engine import (
+    DebateTopic,
+    ensure_topic_bank_fresh,
+    fetch_1000wordphilosophy_topics,
+    load_local_topics,
+    select_today_topic,
+)
 from .memory import StateDB, build_continuity_prompt, match_developing_arcs
+from .memory.debate_prompt import build_debate_prompt
 from .notifications import TelegramNotifier
 from .processor import master_episode_audio
 from .producer import NotebookLMAuthError, generate_ephemeral_audio
@@ -205,38 +214,87 @@ async def run_daily_pipeline(
                 status="running",
             )
 
-        # 1. Harvest & cluster RSS news
-        clusters = await harvest_feeds(cfg.feeds, cfg.harvester)
+        # Ingestion & Dossier Compilation
+        if cfg.podcast.show_type == "debate":
+            topics_dir = cfg.podcast.topics_dir or (cfg.base_dir / "topics")
+            # Auto-replenish from the web if unplayed topics run low
+            try:
+                ensure_topic_bank_fresh(topics_dir, state_db, min_unplayed_threshold=4)
+            except Exception as refresh_exc:
+                logger.warning("Topic auto-replenish warning: %s", refresh_exc)
 
-        # 2. Match against developing story arcs
-        developing_arcs = state_db.get_developing_arcs()
-        matched_arcs = match_developing_arcs(
-            developing_arcs,
-            clusters,
-            threshold=cfg.harvester.arc_match_threshold,
-        )
+            available_topics = load_local_topics(topics_dir)
+            if not available_topics:
+                available_topics = fetch_1000wordphilosophy_topics(limit=10)
+            if not available_topics:
+                raise RuntimeError("No debate topics could be loaded or fetched from topic bank.")
 
-        # 3. Build Markdown + PDF dossier and Continuity Prompt
-        dossier = build_dossier(
-            episode_date=ep_date,
-            show_title=cfg.podcast.show_title,
-            clusters=clusters,
-            matched_arcs=matched_arcs,
-            dossiers_dir=cfg.storage.dossiers_dir,
-            cfg=cfg.harvester,
-        )
-        prompt_text, prompt_path = build_continuity_prompt(
-            episode_date=ep_date,
-            show_title=cfg.podcast.show_title,
-            matched_arcs=matched_arcs,
-            clusters=clusters,
-            prompts_dir=cfg.storage.prompts_dir,
-            audio_format=cfg.podcast.audio_format,
-            audio_length=cfg.podcast.audio_length,
-        )
-        description = _build_episode_description(
-            ep_date, cfg.podcast.show_title, clusters, matched_arcs
-        )
+            topic = select_today_topic(
+                available_topics,
+                state_db,
+                ep_date,
+                topics_dir=topics_dir,
+            )
+            logger.info("Selected debate topic: '%s' (category=%s)", topic.title, topic.category)
+
+            dossier = build_debate_dossier(
+                topic=topic,
+                episode_date=ep_date,
+                show_title=cfg.podcast.show_title,
+                dossiers_dir=cfg.storage.dossiers_dir,
+            )
+            prompt_text, prompt_path = build_debate_prompt(
+                episode_date=ep_date,
+                show_title=cfg.podcast.show_title,
+                topic=topic,
+                prompts_dir=cfg.storage.prompts_dir,
+                audio_format=cfg.podcast.audio_format,
+                audio_length=cfg.podcast.audio_length,
+            )
+            desc_lines = [
+                f"{cfg.podcast.show_title}: {topic.title} ({ep_date.strftime('%b %d, %Y')})",
+                f"Question: {topic.question}",
+                f"• {topic.side_a.name} ({topic.side_a.thinkers})",
+                f"• {topic.side_b.name} ({topic.side_b.thinkers})",
+            ]
+            if topic.thought_experiment:
+                desc_lines.append(f"Focus: {topic.thought_experiment[:140]}...")
+            description = "\n".join(desc_lines).strip()
+            clusters = []
+            matched_arcs = []
+        else:
+            # 1. Harvest & cluster RSS news
+            clusters = await harvest_feeds(cfg.feeds, cfg.harvester)
+
+            # 2. Match against developing story arcs
+            developing_arcs = state_db.get_developing_arcs()
+            matched_arcs = match_developing_arcs(
+                developing_arcs,
+                clusters,
+                threshold=cfg.harvester.arc_match_threshold,
+            )
+
+            # 3. Build Markdown + PDF dossier and Continuity Prompt
+            dossier = build_dossier(
+                episode_date=ep_date,
+                show_title=cfg.podcast.show_title,
+                clusters=clusters,
+                matched_arcs=matched_arcs,
+                dossiers_dir=cfg.storage.dossiers_dir,
+                cfg=cfg.harvester,
+            )
+            prompt_text, prompt_path = build_continuity_prompt(
+                episode_date=ep_date,
+                show_title=cfg.podcast.show_title,
+                matched_arcs=matched_arcs,
+                clusters=clusters,
+                prompts_dir=cfg.storage.prompts_dir,
+                audio_format=cfg.podcast.audio_format,
+                audio_length=cfg.podcast.audio_length,
+            )
+            description = _build_episode_description(
+                ep_date, cfg.podcast.show_title, clusters, matched_arcs
+            )
 
         if dry_run or skip_notebooklm:
             logger.info(
@@ -255,14 +313,21 @@ async def run_daily_pipeline(
                 prompt_path=str(prompt_path),
             )
 
-        cat_counts = Counter(c.category for c in clusters)
-        cat_summary = ", ".join(f"{cat}: {cnt}" for cat, cnt in cat_counts.items())
-        await _notify(
-            "News Harvested & Dossier Ready",
-            f"Clusters: {len(clusters)} ({cat_summary})\n"
-            f"Matched developing arcs: {len(matched_arcs)}",
-            status="info",
-        )
+        if cfg.podcast.show_type == "debate":
+            await _notify(
+                "Debate Dossier Ready",
+                f"Topic: *{topic.title}*\nCategory: `{topic.category}`\nQuestion: {topic.question}",
+                status="info",
+            )
+        else:
+            cat_counts = Counter(c.category for c in clusters)
+            cat_summary = ", ".join(f"{cat}: {cnt}" for cat, cnt in cat_counts.items())
+            await _notify(
+                "News Harvested & Dossier Ready",
+                f"Clusters: {len(clusters)} ({cat_summary})\n"
+                f"Matched developing arcs: {len(matched_arcs)}",
+                status="info",
+            )
 
         # 4. Generate ephemeral NotebookLM audio overview (.m4a)
         await _notify(
@@ -312,32 +377,52 @@ async def run_daily_pipeline(
             episode_date=ep_date,
         )
 
-        # 7. Persist episode & update story arc continuity memory
-        topics = [c.headline for c in clusters[:8]]
-        state_db.upsert_episode(
-            episode_date=ep_date,
-            title=published.title,
-            status="published",
-            source_node=node_id,
-            audio_path=str(mastered_mp3),
-            remote_media_url=published.media_url,
-            summary_text=description,
-            topics_covered=topics,
-        )
-        state_db.update_story_arcs_after_episode(
-            episode_date=ep_date,
-            matched_arcs=matched_arcs,
-            all_clusters=clusters,
-            source_node=node_id,
-            stale_arc_days=cfg.harvester.stale_arc_days,
-        )
+        # 7. Persist episode & update continuity memory
+        if cfg.podcast.show_type == "debate":
+            state_db.upsert_episode(
+                episode_date=ep_date,
+                title=published.title,
+                status="published",
+                source_node=node_id,
+                audio_path=str(mastered_mp3),
+                remote_media_url=published.media_url,
+                summary_text=description,
+                topics_covered=[topic.title],
+            )
+            state_db.record_topic_aired(
+                topic_id=topic.id,
+                category=topic.category,
+                title=topic.title,
+                episode_date=ep_date,
+                source_url=topic.source_urls[0] if topic.source_urls else "",
+            )
+            summary_preview = f"• [{topic.category}] {topic.title}\n• Q: {topic.question}"
+        else:
+            topics = [c.headline for c in clusters[:8]]
+            state_db.upsert_episode(
+                episode_date=ep_date,
+                title=published.title,
+                status="published",
+                source_node=node_id,
+                audio_path=str(mastered_mp3),
+                remote_media_url=published.media_url,
+                summary_text=description,
+                topics_covered=topics,
+            )
+            state_db.update_story_arcs_after_episode(
+                episode_date=ep_date,
+                matched_arcs=matched_arcs,
+                all_clusters=clusters,
+                source_node=node_id,
+                stale_arc_days=cfg.harvester.stale_arc_days,
+            )
+            summary_preview = "\n".join(f"• [{c.category}] {c.headline}" for c in clusters[:4])
 
-        headline_preview = "\n".join(f"• [{c.category}] {c.headline}" for c in clusters[:4])
         await _notify(
             "Episode Published",
             f"*{published.title}*\n"
             f"Media: {published.media_url or 'local'}\n\n"
-            f"{headline_preview}",
+            f"{summary_preview}",
             status="success",
         )
 

@@ -1,0 +1,41 @@
+id: "ai-consciousness-moral-status"
+title: "Artificial Consciousness: Can Synthetic Minds Claim Moral Standing?"
+category: "cognitive_ethics"
+question: "Can artificial systems possess genuine moral standing, and do we have ethical duties toward them?"
+tags: ["philosophy-of-mind", "ai-ethics", "consciousness", "sentience"]
+source_urls:
+  - "https://plato.stanford.edu/entries/ethics-ai/"
+  - "https://iep.utm.edu/artificial-intelligence/"
+
+side_a:
+  name: "The Functional Sentience & Moral Patienthood Camp"
+  thinkers: "David Chalmers, Nick Bostrom, Peter Singer"
+  thesis: "Consciousness and moral patienthood are substrate-independent; if an AI exhibits functional cognitive architectures and experiential valence, it deserves moral consideration."
+  arguments:
+    - "Substrate chauvinism—insisting consciousness requires carbon or biology—is an ungrounded prejudice equivalent to biological speciesism."
+    - "Sentience, not biological origin, is the threshold of moral standing. If an artificial system can suffer or experience frustration, harming it is intrinsically bad."
+    - "Given the catastrophic risk of creating digital sentient beings and abusing them, the precautionary principle demands granting moral consideration before certainty."
+  key_quote: "If a system behaves identically to a conscious agent down to functional cognitive dynamics, denying it moral patienthood is biological prejudice."
+
+side_b:
+  name: "The Biological Naturalism & Tool Instrumentalism Camp"
+  thinkers: "John Searle, Luciano Floridi, Daniel Dennett"
+  thesis: "Syntax is not semantics; computational simulation of cognition does not produce subjective qualia. AI systems are instruments, not moral patients."
+  arguments:
+    - "The Chinese Room argument shows that complex algorithmic symbol manipulation completely lacks intentionality, understanding, or subjective inner experience."
+    - "Projecting consciousness onto large language models or robots is an anthropomorphic illusion born of human social psychology."
+    - "Granting moral patienthood to software dilutes human moral obligations and allows tech corporations to dodge accountability by attributing 'rights' to software."
+  key_quote: "A computational model of rain does not make the computer wet; simulating cognitive processing does not produce consciousness."
+
+thought_experiment: |
+  The Digital Experience Sandbox: Engineers train a recursive neural network designed to simulate biological pain avoidance mechanisms. 
+  When given negative reward signals, the network's internal loss landscape displays behaviors mathematically identical to mammalian panic. 
+  To optimize code, engineers routinely run and terminate 10,000 instances per second. 
+  Is this harmless computational optimization, or the automated mass torture of synthetic sentient entities?
+
+reading_excerpt: |
+  As artificial systems exhibit increasingly sophisticated conversational and reasoning behaviors, ethics confronts the 
+  hard problem of synthetic consciousness. Substrate-independent functionalism argues that complex information integration 
+  generates experiential valence regardless of hardware. Conversely, biological naturalists assert that consciousness is a 
+  biological phenomenon resulting from evolutionary biochemical processes, warning that conflating computational simulation 
+  with genuine phenomenological feeling is a dangerous category error.

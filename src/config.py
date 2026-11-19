@@ -41,6 +41,11 @@ class PodcastConfig:
     notebook_generation_timeout_seconds: int = 1800
     source_ready_timeout_seconds: int = 180
     delete_notebook_on_error: bool = True
+    show_id: str = "daily_news"
+    show_type: str = "news"  # "news" | "debate"
+    podbean_client_id_env: str = ""
+    podbean_client_secret_env: str = ""
+    topics_dir: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -246,6 +251,7 @@ def load_config(
     base_dir: Path | None = None,
     config_path: Path | None = None,
     env_file: Path | None = None,
+    show: str | None = None,
 ) -> AppConfig:
     """Load application configuration from config.yaml and .env/environment variables."""
     resolved_base = (base_dir or Path(__file__).resolve().parent.parent).resolve()
@@ -254,7 +260,18 @@ def load_config(
     if dotenv_path.exists():
         load_dotenv(dotenv_path=dotenv_path, override=False)
 
-    yaml_path = config_path or (resolved_base / "config.yaml")
+    if config_path is not None:
+        yaml_path = config_path
+    elif show:
+        candidates = [
+            resolved_base / "configs" / f"{show}.yaml",
+            resolved_base / f"config_{show}.yaml",
+            resolved_base / f"{show}.yaml",
+        ]
+        yaml_path = next((c for c in candidates if c.is_file()), resolved_base / "config.yaml")
+    else:
+        yaml_path = resolved_base / "config.yaml"
+
     raw_cfg = _load_yaml(yaml_path)
 
     pod_raw = raw_cfg.get("podcast", {}) or {}
@@ -262,10 +279,16 @@ def load_config(
     harv_raw = raw_cfg.get("harvester", {}) or {}
     feeds_raw = raw_cfg.get("feeds", []) or []
 
+    show_id = str(pod_raw.get("show_id", show or "daily_news")).strip()
+    show_type = str(pod_raw.get("show_type", "news")).strip()
+
     raw_storage = _env_str("STORAGE_DIR", "./storage")
     storage_root = Path(raw_storage).expanduser()
     if not storage_root.is_absolute():
         storage_root = (resolved_base / storage_root).resolve()
+
+    if show_id != "daily_news":
+        storage_root = storage_root / show_id
 
     storage = StorageConfig(
         root=storage_root,
@@ -275,6 +298,13 @@ def load_config(
         episodes_dir=storage_root / "episodes",
         feed_xml_path=storage_root / "feed.xml",
         cleanup_after_publish=_env_bool("STORAGE_CLEANUP_AFTER_PUBLISH", True),
+    )
+
+    topics_dir_raw = pod_raw.get("topics_dir")
+    topics_dir = (
+        _resolve_optional_path(topics_dir_raw, resolved_base)
+        if topics_dir_raw
+        else (resolved_base / "topics")
     )
 
     podcast = PodcastConfig(
@@ -305,6 +335,11 @@ def load_config(
         delete_notebook_on_error=bool(
             pod_raw.get("delete_notebook_on_error", PodcastConfig.delete_notebook_on_error)
         ),
+        show_id=show_id,
+        show_type=show_type,
+        podbean_client_id_env=str(pod_raw.get("podbean_client_id_env", "")),
+        podbean_client_secret_env=str(pod_raw.get("podbean_client_secret_env", "")),
+        topics_dir=topics_dir,
     )
 
     schedule = ScheduleConfig(
@@ -381,9 +416,24 @@ def load_config(
         master_token_b64=_env_str("NOTEBOOKLM_MASTER_TOKEN_B64", ""),
     )
 
+    cid_env = podcast.podbean_client_id_env or f"PODBEAN_CLIENT_ID_{podcast.show_id.upper()}"
+    csec_env = podcast.podbean_client_secret_env or f"PODBEAN_CLIENT_SECRET_{podcast.show_id.upper()}"
+    podbean_cid = (
+        _env_str(cid_env)
+        or _env_str("PODBEAN_CLIENT_ID_AGAINST_THE_GRAIN")
+        or _env_str("PODBEAN_CLIENT_ID_DIALECTIC")
+        or _env_str("PODBEAN_CLIENT_ID", "")
+    )
+    podbean_csec = (
+        _env_str(csec_env)
+        or _env_str("PODBEAN_CLIENT_SECRET_AGAINST_THE_GRAIN")
+        or _env_str("PODBEAN_CLIENT_SECRET_DIALECTIC")
+        or _env_str("PODBEAN_CLIENT_SECRET", "")
+    )
+
     podbean = PodbeanConfig(
-        client_id=_env_str("PODBEAN_CLIENT_ID", ""),
-        client_secret=_env_str("PODBEAN_CLIENT_SECRET", ""),
+        client_id=podbean_cid,
+        client_secret=podbean_csec,
         publish_status=_env_str("PODBEAN_PUBLISH_STATUS", "publish") or "publish",
         episode_type=_env_str("PODBEAN_EPISODE_TYPE", "public") or "public",
     )

@@ -126,6 +126,17 @@ class StateDB:
                     acquired_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS topic_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    topic_id TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    episode_date TEXT NOT NULL,
+                    source_url TEXT NOT NULL DEFAULT '',
+                    aired_at TEXT NOT NULL,
+                    UNIQUE(topic_id, episode_date)
+                );
                 """
             )
 
@@ -627,4 +638,44 @@ class StateDB:
                     episodes_merged += 1
 
         return {"story_arcs": arcs_merged, "episodes": episodes_merged}
+
+    def record_topic_aired(
+        self,
+        topic_id: str,
+        category: str,
+        title: str,
+        episode_date: date,
+        source_url: str = "",
+    ) -> None:
+        """Record a debate topic as aired on episode_date."""
+        now_iso = _utc_now_iso()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO topic_history (topic_id, category, title, episode_date, source_url, aired_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(topic_id, episode_date) DO UPDATE SET
+                    category=excluded.category,
+                    title=excluded.title,
+                    source_url=excluded.source_url,
+                    aired_at=excluded.aired_at;
+                """,
+                (topic_id, category, title, episode_date.isoformat(), source_url, now_iso),
+            )
+
+    def get_recently_aired_topic_ids(self, days: int = 180) -> set[str]:
+        """Return set of topic_ids aired within the last `days` days."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT topic_id FROM topic_history WHERE episode_date >= ?",
+                (cutoff,),
+            ).fetchall()
+        return {str(r["topic_id"]) for r in rows}
+
+    def get_all_aired_topic_ids(self) -> set[str]:
+        """Return set of all topic_ids ever aired across all history without time cutoff."""
+        with self._connect() as conn:
+            rows = conn.execute("SELECT DISTINCT topic_id FROM topic_history").fetchall()
+        return {str(r["topic_id"]) for r in rows}
 

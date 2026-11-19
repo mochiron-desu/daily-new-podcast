@@ -14,6 +14,13 @@ import uvicorn
 
 from .config import load_config
 from .failover import create_app, probe_node, run_failover_check, sync_state_from_nodes
+from .harvester.topic_engine import (
+    ensure_topic_bank_fresh,
+    fetch_1000wordphilosophy_topics,
+    load_local_topics,
+    save_topic_to_yaml,
+    select_today_topic,
+)
 from .memory import StateDB
 from .notifications import check_telegram_credentials
 from .pipeline import run_daily_pipeline
@@ -119,36 +126,53 @@ async def _cmd_status(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    common_p = argparse.ArgumentParser(add_help=False)
+    common_p.add_argument("--base-dir", default=None, help="Repository root containing config.yaml")
+    common_p.add_argument("--config", default=None, help="Explicit config YAML file path")
+    common_p.add_argument("--show", default=None, help="Show identifier (e.g. 'daily_news', 'dialectic')")
+    common_p.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING)")
+
     parser = argparse.ArgumentParser(
         prog="daily-news-podcast",
-        description="Autonomous Daily News Podcast Pipeline (Railway primary + local failover)",
+        description="Autonomous Daily News & Intellectual Debate Podcast Pipeline",
+        parents=[common_p],
     )
-    parser.add_argument("--base-dir", default=None, help="Repository root containing config.yaml")
-    parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG, INFO, WARNING)")
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    serve_p = sub.add_parser("serve", help="Run HTTP server + background daily/failover scheduler")
+    serve_p = sub.add_parser("serve", parents=[common_p], help="Run HTTP server + background daily/failover scheduler")
     serve_p.add_argument("--host", default=None, help="Override bind host")
     serve_p.add_argument("--port", type=int, default=None, help="Override bind port")
     serve_p.add_argument("--no-scheduler", action="store_true", help="Disable internal scheduler loop")
 
-    run_p = sub.add_parser("run-once", help="Run the podcast pipeline immediately on this node")
+    run_p = sub.add_parser("run-once", parents=[common_p], help="Run the podcast pipeline immediately on this node")
     run_p.add_argument("--date", default=None, help="Target episode date (YYYY-MM-DD)")
-    run_p.add_argument("--dry-run", action="store_true", help="Harvest + dossier + prompt only")
+    run_p.add_argument("--dry-run", action="store_true", help="Harvest/select topic + dossier + prompt only")
     run_p.add_argument("--skip-notebooklm", action="store_true", help="Skip NotebookLM & publish")
     run_p.add_argument("--force", action="store_true", help="Ignore existing published status")
 
-    fail_p = sub.add_parser("failover-check", help="Check Railway/peers and run locally if down")
+    fail_p = sub.add_parser("failover-check", parents=[common_p], help="Check Railway/peers and run locally if down")
     fail_p.add_argument("--date", default=None, help="Target episode date (YYYY-MM-DD)")
     fail_p.add_argument("--force", action="store_true", help="Bypass time cutoff")
     fail_p.add_argument("--dry-run", action="store_true", help="Run failover without uploading")
 
-    sub.add_parser("sync-state", help="Pull and merge state from Railway/peers into local SQLite")
-    sub.add_parser("status", help="Show local state, today's episode, and active story arcs")
+    sub.add_parser("sync-state", parents=[common_p], help="Pull and merge state from Railway/peers into local SQLite")
+    sub.add_parser("status", parents=[common_p], help="Show local state, today's episode, and active story arcs")
 
-    doc_p = sub.add_parser("doctor", help="Check ffmpeg, NotebookLM auth, publisher, and peers")
+    doc_p = sub.add_parser("doctor", parents=[common_p], help="Check ffmpeg, NotebookLM auth, publisher, and peers")
     doc_p.add_argument("--live", action="store_true", help="Run live NotebookLM & Podbean checks")
+
+    tb_p = sub.add_parser("topic-bank", parents=[common_p], help="Manage and inspect the debate topic bank")
+    tb_sub = tb_p.add_subparsers(dest="tb_action", required=True)
+
+    tb_fetch = tb_sub.add_parser("fetch", help="Fetch fresh debate topics from 1000-Word Philosophy")
+    tb_fetch.add_argument("--limit", type=int, default=10, help="Max topics to fetch")
+    tb_fetch.add_argument("--save", action="store_true", help="Save fetched topics into topics/ directory")
+
+    tb_sub.add_parser("list", help="List all local debate topics and their aired status")
+
+    tb_sim = tb_sub.add_parser("simulate", help="Run multi-day simulation verifying zero reuse and web refresh")
+    tb_sim.add_argument("--days", type=int, default=14, help="Number of days to simulate")
 
     return parser
 
@@ -159,9 +183,10 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(args.log_level)
 
     base_dir = Path(args.base_dir) if args.base_dir else None
+    config_path = Path(args.config) if args.config else None
 
     if args.command == "serve":
-        cfg = load_config(base_dir=base_dir)
+        cfg = load_config(base_dir=base_dir, config_path=config_path, show=args.show)
         app = create_app(cfg, enable_scheduler=not args.no_scheduler)
         uvicorn.run(
             app,
@@ -173,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run-once":
-        cfg = load_config(base_dir=base_dir)
+        cfg = load_config(base_dir=base_dir, config_path=config_path, show=args.show)
         res = asyncio.run(
             run_daily_pipeline(
                 cfg,
@@ -187,7 +212,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if res.status == "failed" else 0
 
     if args.command == "failover-check":
-        cfg = load_config(base_dir=base_dir)
+        cfg = load_config(base_dir=base_dir, config_path=config_path, show=args.show)
         outcome = asyncio.run(
             run_failover_check(
                 cfg,
@@ -208,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "sync-state":
-        cfg = load_config(base_dir=base_dir)
+        cfg = load_config(base_dir=base_dir, config_path=config_path, show=args.show)
         db = StateDB(cfg.storage.db_path)
         targets = [u for u in [cfg.failover.primary_url, *cfg.failover.peer_urls] if u]
         count = asyncio.run(
@@ -227,6 +252,63 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         return asyncio.run(_cmd_doctor(args))
+
+    if args.command == "topic-bank":
+        cfg = load_config(base_dir=base_dir, config_path=config_path, show=args.show or "dialectic")
+        topics_dir = cfg.podcast.topics_dir or (cfg.base_dir / "topics")
+
+        if args.tb_action == "fetch":
+            print(f"Fetching up to {args.limit} topics from 1000-Word Philosophy...")
+            fetched = fetch_1000wordphilosophy_topics(limit=args.limit)
+            print(f"Fetched {len(fetched)} topic(s):")
+            for idx, t in enumerate(fetched, start=1):
+                print(f"  {idx}. [{t.category}] {t.title}")
+                if args.save:
+                    saved_path = save_topic_to_yaml(t, topics_dir)
+                    print(f"     -> Saved to {saved_path.relative_to(cfg.base_dir)}")
+            return 0
+
+        if args.tb_action == "list":
+            local = load_local_topics(topics_dir)
+            db = StateDB(cfg.storage.db_path)
+            all_aired = db.get_all_aired_topic_ids()
+            print(f"Loaded {len(local)} local topic(s) from {topics_dir}:")
+            for idx, t in enumerate(local, start=1):
+                status_tag = "AIRED" if t.id in all_aired else "READY"
+                print(f"  {idx}. [{status_tag}] [{t.category}] {t.title} ({t.id})")
+            return 0
+
+        if args.tb_action == "simulate":
+            from datetime import timedelta
+            db = StateDB(cfg.storage.db_path)
+            sim_days = args.days
+            print(f"Starting {sim_days}-day bruteforce simulation for show '{cfg.podcast.show_id}'...")
+
+            selected_ids: list[str] = []
+            start_date = now_in_timezone(cfg.schedule.timezone).date()
+            web_refreshes = 0
+
+            for i in range(sim_days):
+                cur_date = start_date + timedelta(days=i)
+                added = ensure_topic_bank_fresh(topics_dir, db, min_unplayed_threshold=3)
+                if added > 0:
+                    web_refreshes += 1
+                local = load_local_topics(topics_dir)
+                picked = select_today_topic(local, db, cur_date, topics_dir=topics_dir)
+
+                if picked.id in selected_ids:
+                    print(f"❌ FATAL ERROR: Topic '{picked.id}' REPEATED on day {i+1} ({cur_date})!")
+                    return 1
+                selected_ids.append(picked.id)
+                db.record_topic_aired(picked.id, picked.category, picked.title, cur_date)
+                print(f"  Day {i+1:02d} ({cur_date}): [{picked.category}] {picked.title}")
+
+            print("\n--- Simulation Summary ---")
+            print(f"Days simulated      : {sim_days}")
+            print(f"Distinct topics     : {len(selected_ids)}")
+            print(f"Duplicates detected : 0 (STRICT ZERO REUSE VERIFIED)")
+            print(f"Web refreshes fired : {web_refreshes}")
+            return 0
 
     parser.print_help()
     return 1

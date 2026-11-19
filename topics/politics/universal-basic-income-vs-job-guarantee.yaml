@@ -1,0 +1,40 @@
+id: "ubi-vs-job-guarantee"
+title: "Universal Basic Income vs Federal Job Guarantee"
+category: "politics"
+question: "Should society guarantee unconditional income or guaranteed dignified employment?"
+tags: ["political-economy", "labor", "ubi", "social-justice"]
+source_urls:
+  - "https://plato.stanford.edu/entries/basic-income/"
+  - "https://iep.utm.edu/work-eth/"
+
+side_a:
+  name: "The Unconditional Basic Income Camp"
+  thinkers: "Philippe Van Parijs, Guy Standing, Karl Widerquist"
+  thesis: "Every citizen should receive an unconditional, regular cash grant without means testing or work requirement to ensure real freedom."
+  arguments:
+    - "Decouples biological survival from coercive wage labor, giving workers genuine power to say 'no' to exploitative employers."
+    - "Recognizes unpaid caretaking, domestic labor, art, and civic volunteering as inherently valuable without bureaucratic surveillance."
+    - "Eliminates administrative means-testing traps that penalize recipients for earning extra income."
+  key_quote: "Real freedom is not just the freedom to choose what work to do, but the freedom not to work for someone else to survive."
+
+side_b:
+  name: "The Federal Job Guarantee Camp"
+  thinkers: "Pavlina Tcherneva, Stephanie Kelton, William Darity Jr."
+  thesis: "The state should provide a permanent, voluntary, publicly funded job at living wage with benefits to anyone ready and willing to work."
+  arguments:
+    - "Work provides psychological structure, social inclusion, collective solidarity, and dignified purpose that a passive cash transfer cannot replicate."
+    - "Directly anchors price stability by acting as a countercyclical buffer stock of labor during recessions without driving inflation."
+    - "Channels human labor directly into public goods: eldercare, ecological restoration, community infrastructure, and education."
+  key_quote: "A right to an income without a right to a participatory role in collective social production is an impoverished substitute for economic democracy."
+
+thought_experiment: |
+  The Rapid Automation Disruption: Autonomous AI and robotics rapidly displace 25% of logistical and administrative workers in a region. 
+  Under UBI, workers receive $1,500/month unconditionally. Some pursue education and hobbies; others experience acute depression, social isolation, and loss of purpose. 
+  Under Job Guarantee, workers are offered green infrastructure, eldercare, and community cultural roles at $22/hour. 
+  Which policy delivers genuine human flourishing: liberating time unconditionally, or socially embedding work into public purpose?
+
+reading_excerpt: |
+  The debate between UBI and Job Guarantee reflects rival conceptions of human nature and social citizenship. 
+  UBI champions negative and positive liberty through unconditional autonomy, seeing work as instrumental. 
+  Job Guarantee theorists emphasize the sociality of labor, arguing that unemployment is a deliberate policy choice of monetary regimes 
+  and that true economic citizenship requires guaranteed participatory membership in the social division of labor.
