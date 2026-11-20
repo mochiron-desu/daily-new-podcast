@@ -6,7 +6,7 @@ podcast:
   show_description: "Ideas worth disagreeing about. Two uncompromising perspectives. One difficult question. No manufactured consensus."
   author: "Suraj & AI Sparring Hosts"
   language: "en"
-  episode_title_template: "Against the Grain — {date}"
+  episode_title_template: "{topic} — {date}"
   audio_format: "debate"     # debate | critique | brief | deep-dive
   audio_length: "short"      # short (3-5 mins) | default | long
   mp3_bitrate: "192k"

@@ -121,7 +121,10 @@ async def run_daily_pipeline(
 
     ep_date = target_date or now_in_timezone(cfg.schedule.timezone).date()
     date_str = ep_date.isoformat()
-    episode_title = cfg.podcast.episode_title_template.format(date=date_str)
+    episode_title = cfg.podcast.episode_title_template.format(
+        date=date_str,
+        topic=cfg.podcast.show_title,
+    )
     node_id = cfg.failover.node_id
 
     async def _notify(stage: str, detail: str = "", *, status: str = "info") -> None:
@@ -237,6 +240,10 @@ async def run_daily_pipeline(
                 topics_dir=topics_dir,
             )
             logger.info("Selected debate topic: '%s' (category=%s)", topic.title, topic.category)
+            episode_title = cfg.podcast.episode_title_template.format(
+                date=date_str,
+                topic=topic.title,
+            )
 
             dossier = build_debate_dossier(
                 topic=topic,

@@ -126,6 +126,8 @@ async def test_dialectic_pipeline_dry_run() -> None:
         force=True,
     )
     assert result.status == "dry_run_complete"
+    assert result.title.endswith("— 2026-11-19")
+    assert not result.title.startswith("Against the Grain")
     assert Path(result.dossier_pdf_path).is_file()
     assert Path(result.prompt_path).is_file()
 
