@@ -113,6 +113,8 @@ def test_debate_dossier_and_prompt_generation(tmp_path: Path) -> None:
     assert prompt_path.is_file()
     assert "RULES OF ENGAGEMENT" in prompt_text
     assert "Host 1 vigorously defends Proponents" in prompt_text
+    assert "The Daily Dialectic" in prompt_text
+    assert "NEVER say 'Welcome to the debate'" in prompt_text
 
 
 @pytest.mark.asyncio
